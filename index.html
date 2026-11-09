@@ -1022,6 +1022,32 @@ $("#btnGuardarCfg").addEventListener("click", ()=>{
 });
 
 /* ---------- Carga del catálogo desde CSV ---------- */
+/* Repara texto que fue guardado como UTF-8 pero leido como Latin-1
+   ("rÃ¡pida" -> "rápida", "11.25Â°" -> "11.25°"). Pasa cuando Excel
+   reinterpreta el archivo al abrirlo y volverlo a guardar. */
+const MOJI = {"Ã¡":"á","Ã©":"é","Ã­":"í","Ã³":"ó","Ãº":"ú","Ã±":"ñ","Ã¼":"ü",
+  "Ã\u0081":"Á","Ã‰":"É","Ã\u008d":"Í","Ã“":"Ó","Ãš":"Ú","Ã'":"Ñ","Ãœ":"Ü",
+  "Â°":"°","Âº":"º","Âª":"ª","Â²":"²","Â³":"³","Â¿":"¿","Â¡":"¡","Â´":"´",
+  "Â½":"½","Â¼":"¼","Â¾":"¾","Â ":" ","â€œ":"“","â€\u009d":"”",
+  "â€™":"'","â€“":"–","â€”":"—"};
+function repararTexto(t){
+  if(!/[ÃÂâ][\u0080-¿]/.test(t)) return t;
+  let soloBytes = true;
+  for(let i=0;i<t.length;i++){ if(t.charCodeAt(i)>255){ soloBytes=false; break; } }
+  if(soloBytes && typeof TextDecoder !== "undefined"){
+    try{
+      const b = new Uint8Array(t.length);
+      for(let i=0;i<t.length;i++) b[i] = t.charCodeAt(i);
+      return new TextDecoder("utf-8",{fatal:true}).decode(b);
+    }catch(e){ /* no era eso: seguimos con la tabla */ }
+  }
+  return t.replace(/[ÃÂâ][\u0080-¿][\u0080-¿]?/g, s => MOJI[s] || MOJI[s.slice(0,2)] || s);
+}
+function decodificar(buffer){
+  if(typeof TextDecoder === "undefined") return "";
+  try{ return repararTexto(new TextDecoder("utf-8",{fatal:true}).decode(buffer)); }
+  catch(e){ return repararTexto(new TextDecoder("windows-1252").decode(buffer)); }
+}
 function partirCSV(texto){
   texto = texto.replace(/^﻿/,"").replace(/\r\n?/g,"\n");
   const prim = texto.slice(0, texto.indexOf("\n")<0?texto.length:texto.indexOf("\n"));
@@ -1066,7 +1092,9 @@ $("#archCsv").addEventListener("change", ev => {
   lector.onerror = ()=> aviso("No se pudo leer el archivo.","err",5);
   lector.onload = () => {
     try{
-      const filas = partirCSV(String(lector.result||""));
+      const crudo = (typeof lector.result === "string")
+        ? repararTexto(lector.result) : decodificar(lector.result);
+      const filas = partirCSV(crudo);
       if(filas.length < 2) throw new Error("El archivo no tiene filas de datos.");
       const cab = filas[0].map(limpiaCab);
       const col = {};
@@ -1136,7 +1164,8 @@ $("#archCsv").addEventListener("change", ev => {
       $("#archCsv").value = "";
     }
   };
-  lector.readAsText(f, "UTF-8");
+  if(typeof TextDecoder !== "undefined" && lector.readAsArrayBuffer) lector.readAsArrayBuffer(f);
+  else lector.readAsText(f, "UTF-8");
 });
 $("#btnRestCat").addEventListener("click", ()=>{
   abrirHoja('<div class="hoja-tit">¿Volver a la lista de ejemplo?</div>'+
@@ -1173,6 +1202,17 @@ function encabezado(){
 }
 function iniciar(){
   estadoConexion(); avisosFijos();
+  // Repara listas cargadas antes del arreglo de codificacion, sin volver a cargar el CSV
+  if(cfg.catalogoPropio && catalogo.some(m =>
+       /[ÃÂâ][\u0080-¿]/.test(String(m.nombre||"")+String(m.categoria||"")))){
+    catalogo = catalogo.map(m => Object.assign({}, m, {
+      nombre:    repararTexto(String(m.nombre||"")),
+      categoria: repararTexto(String(m.categoria||"")),
+      unidad:    repararTexto(String(m.unidad||""))
+    }));
+    S.set("catalogo", catalogo);
+    aviso("Se corrigieron las tildes y los grados de la lista de precios.","ok",5);
+  }
   pintarCats(); pintarMat(); refrescarBadges(); encabezado();
   if(!cfg.vendedora && !cfg.empresa){
     aviso("Primero entra a <b>Ajustes</b>: pon tu nombre, la comisión y carga la lista de precios.","info",9);
