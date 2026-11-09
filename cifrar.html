@@ -134,7 +134,8 @@ $("#arch").addEventListener("change", ev => {
     $("#infoArch").innerHTML = faltan.length
       ? '<div class="aviso err">Al archivo le faltan columnas: <b>'+faltan.join(", ")+
         '</b>. ¿Exportaste la hoja BASE?</div>'
-      : '<div class="aviso ok"><b>'+nFilas+'</b> filas leídas de <b>'+f.name+'</b>.</div>';
+      : '<div class="aviso ok"><b>'+nFilas+'</b> líneas leídas de <b>'+f.name+'</b>. '+
+        'Incluye las filas vacías de la hoja; la app mostrará el conteo real de materiales.</div>';
     if(faltan.length) csvTexto = "";
     revisar();
   };
@@ -168,7 +169,16 @@ function revisar(){
 }
 
 /* ---- cifrado ---- */
-const b64 = u8 => btoa(String.fromCharCode.apply(null, u8));
+/* Por bloques: String.fromCharCode.apply con cientos de miles de bytes
+   desborda la pila de argumentos del navegador. */
+function b64(u8){
+  let s = "";
+  const BLOQUE = 0x8000;
+  for(let i = 0; i < u8.length; i += BLOQUE){
+    s += String.fromCharCode.apply(null, u8.subarray(i, i + BLOQUE));
+  }
+  return btoa(s);
+}
 const ITER = 310000;
 
 $("#btn").addEventListener("click", async () => {

@@ -1,7 +1,7 @@
 /* Ventas en Ruta — service worker.
    Guarda la app en el celular para que abra sin internet.
    Al publicar una version nueva, sube el numero de CACHE. */
-const CACHE = "ventas-ruta-v3";
+const CACHE = "ventas-ruta-v4";
 const ARCHIVOS = [
   "./",
   "./index.html",
