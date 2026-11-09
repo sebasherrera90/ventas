@@ -236,8 +236,14 @@
         <div class="campo"><label for="cliTel">Teléfono</label>
           <input id="cliTel" type="tel" placeholder="300 000 0000" autocomplete="off"></div>
       </div>
-      <div class="campo" style="margin-top:10px"><label for="cliNit">NIT / Cédula</label>
-        <input id="cliNit" type="text" placeholder="Opcional" autocomplete="off"></div>
+      <div class="item-cuerpo" style="margin-top:10px">
+        <div class="campo"><label for="cliNit">NIT / Cédula</label>
+          <input id="cliNit" type="text" placeholder="Opcional" autocomplete="off"></div>
+        <div class="campo"><label for="cliCiudad">Ciudad</label>
+          <input id="cliCiudad" type="text" placeholder="Medellín" autocomplete="off"></div>
+      </div>
+      <div class="campo" style="margin-top:10px"><label for="cliObra">Nombre del proyecto u obra</label>
+        <input id="cliObra" type="text" placeholder="Opcional: sale resaltado en el PDF" autocomplete="off"></div>
       <div class="campo" style="margin-top:10px"><label for="cliObs">Observaciones</label>
         <textarea id="cliObs" rows="2" placeholder="Forma de pago, sitio de entrega, plazo…"></textarea></div>
     </div>
@@ -250,7 +256,8 @@
       <div class="tot-fila grande"><span>Total a cobrar</span><b id="tVenta">$0</b></div>
     </div>
 
-    <button class="btn btn-wa" id="btnWa">Enviar cotización al cliente (WhatsApp)</button>
+    <button class="btn btn-wa" id="btnPdf">Enviar cotización en PDF</button>
+    <button class="btn btn-sec" id="btnWa">Enviar como texto por WhatsApp</button>
     <button class="btn btn-pri" id="btnCerrar">Cerrar venta y registrarla</button>
     <button class="btn btn-gris" id="btnVaciar">Vaciar cotización</button>
   </div>
@@ -293,6 +300,38 @@
         <input id="cfgDesc" type="number" inputmode="decimal" min="0" max="90" step="1"></div>
     </div>
     <div class="ayuda">El precio no puede bajar del <b>precio mínimo</b> de la lista ni del descuento máximo que definas aquí. Si lo intenta, la app la alerta y no deja cerrar la venta.</div>
+  </div>
+
+  <h2 class="sec">Cotización en PDF</h2>
+  <div class="item">
+    <div class="item-cuerpo" style="margin-top:0">
+      <div class="campo"><label for="cfgCons">Próximo consecutivo</label>
+        <input id="cfgCons" type="number" inputmode="numeric" min="1" step="1"></div>
+      <div class="campo"><label for="cfgIva">IVA (%)</label>
+        <input id="cfgIva" type="number" inputmode="decimal" min="0" max="50" step="0.5"></div>
+    </div>
+    <div class="item-cuerpo" style="margin-top:10px">
+      <div class="campo"><label for="cfgCiudad">Ciudad por defecto</label>
+        <input id="cfgCiudad" type="text" placeholder="Medellín" autocomplete="off"></div>
+      <div class="campo"><label for="cfgCargo">Cargo en la firma</label>
+        <input id="cfgCargo" type="text" placeholder="Representante técnico comercial" autocomplete="off"></div>
+    </div>
+    <div class="campo" style="margin-top:10px"><label for="cfgPago">Forma de pago</label>
+      <textarea id="cfgPago" rows="2"></textarea></div>
+    <div class="item-cuerpo" style="margin-top:10px">
+      <div class="campo"><label for="cfgEntrega">Tiempo de entrega</label>
+        <input id="cfgEntrega" type="text" autocomplete="off"></div>
+      <div class="campo"><label for="cfgValidez">Validez de la oferta</label>
+        <input id="cfgValidez" type="text" autocomplete="off"></div>
+    </div>
+    <div class="item-cuerpo" style="margin-top:10px">
+      <div class="campo"><label for="cfgDescuento">Descuento</label>
+        <input id="cfgDescuento" type="text" autocomplete="off"></div>
+      <div class="campo"><label for="cfgPuesto">Material puesto</label>
+        <input id="cfgPuesto" type="text" autocomplete="off"></div>
+    </div>
+    <div class="ayuda">Estas condiciones salen al pie de cada cotización. El consecutivo sube solo
+      cada vez que generas un PDF nuevo.</div>
   </div>
 
   <h2 class="sec">Lista de precios</h2>
@@ -347,6 +386,8 @@
   <div id="hojaCont"></div>
 </div>
 
+<script src="membrete.js"></script>
+<script src="pdf-cotizacion.js"></script>
 <script>
 "use strict";
 /* =========================================================================
@@ -374,7 +415,12 @@ const CAT_DEMO = [
 const CFG_DEF = {
   vendedora:"", empresa:"", comision:10, descMax:15,
   url:"", token:"", wa:"", catalogoPropio:false, catalogoNombre:"",
-  clave:"", catalogoVersion:""
+  clave:"", catalogoVersion:"",
+  consecutivo:5576, iva:19, ciudad:"Medellín",
+  cargo:"Representante técnico comercial",
+  pago:"ANTICIPO DEL (50 %) Y OTRO (50 %) RESTANTE SE PAGARA CONTRA ENTREGA DEL MATERIAL EN OBRA.",
+  entrega:"A CONVENIR", validez:"25 DIAS", descuento:"INCLUIDO",
+  puesto:"EN OBRA, SOBRE PLATAFORMA DE CAMION"
 };
 
 /* ---------- Almacenamiento resistente ---------- */
@@ -666,6 +712,8 @@ function pintarCot(){
   const c = S.get("cliente",{});
   $("#cliNom").value = c.nombre||""; $("#cliCon").value = c.contacto||"";
   $("#cliTel").value = c.telefono||""; $("#cliNit").value = c.nit||"";
+  $("#cliCiudad").value = c.ciudad || cfg.ciudad || "";
+  $("#cliObra").value = c.obra||"";
   $("#cliObs").value = c.obs||"";
   totalesEnPantalla();
 }
@@ -678,10 +726,16 @@ function totalesEnPantalla(){
   $("#tVenta").textContent = pesos(t.venta);
   $("#btnCerrar").disabled = hayViolacion();
 }
-["cliNom","cliCon","cliTel","cliNit","cliObs"].forEach(id =>
-  $("#"+id).addEventListener("input", ()=> S.set("cliente",{
+function guardarCliente(extra){
+  const c = Object.assign(S.get("cliente",{}), {
     nombre:$("#cliNom").value, contacto:$("#cliCon").value, telefono:$("#cliTel").value,
-    nit:$("#cliNit").value, obs:$("#cliObs").value })));
+    nit:$("#cliNit").value, ciudad:$("#cliCiudad").value, obra:$("#cliObra").value,
+    obs:$("#cliObs").value }, extra||{});
+  S.set("cliente", c);
+  return c;
+}
+["cliNom","cliCon","cliTel","cliNit","cliCiudad","cliObra","cliObs"].forEach(id =>
+  $("#"+id).addEventListener("input", ()=> guardarCliente()));
 
 $("#btnVaciar").addEventListener("click", ()=>{
   abrirHoja('<div class="hoja-tit">¿Vaciar la cotización?</div>'+
@@ -715,6 +769,80 @@ function textoCliente(){
   if(cfg.vendedora) L.push("Atendido por "+cfg.vendedora);
   return L.join("\n");
 }
+/* ---------- Cotización en PDF con el formato de la empresa ---------- */
+const MESES = ["ENERO","FEBRERO","MARZO","ABRIL","MAYO","JUNIO","JULIO",
+               "AGOSTO","SEPTIEMBRE","OCTUBRE","NOVIEMBRE","DICIEMBRE"];
+function armarPDF(){
+  if(typeof window.generarCotizacionPDF !== "function")
+    throw new Error("El generador de PDF no cargó. Abre la app con internet una vez.");
+  const c = guardarCliente();
+  let numero = c.numero;
+  if(!numero){                              // se asigna al primer PDF de esta cotización
+    numero = num(cfg.consecutivo) || 1;
+    cfg.consecutivo = numero + 1;
+    S.set("cfg", cfg);
+    guardarCliente({numero:numero});
+  }
+  const hoy = new Date();
+  const ciudad = (c.ciudad || cfg.ciudad || "").trim();
+  const t = totalesCarrito();
+  const pctIva = num(cfg.iva);
+  const iva = Math.round(t.venta * pctIva / 100);
+  return window.generarCotizacionPDF({
+    cotizacion: String(numero),
+    fecha: (ciudad ? ciudad.toUpperCase()+", " : "") + hoy.getDate() + " DE " +
+           MESES[hoy.getMonth()] + " DEL " + hoy.getFullYear(),
+    cliente: c.nombre, telefono: c.telefono, atencion: c.contacto,
+    nit: c.nit, ciudad: ciudad, titulo: c.obra,
+    items: carrito.map(it => ({
+      descripcion: it.nombre + (it.codigo ? "  (" + it.codigo + ")" : ""),
+      und: it.unidad, cant: String(num(it.cantidad)),
+      unit: pesosC(it.precio), total: pesosC(num(it.precio) * num(it.cantidad))
+    })),
+    subtotal: pesosC(t.venta), iva: pesosC(iva), total: pesosC(t.venta + iva), ivaPct: pctIva,
+    condiciones: { pago:cfg.pago, entrega:cfg.entrega, validez:cfg.validez,
+                   descuento:cfg.descuento, material:cfg.puesto },
+    firma: { nombre: cfg.vendedora, cargo: cfg.cargo },
+    empresa: cfg.empresa || "Hidroval S.A.S.",
+    observaciones: c.obs
+  });
+}
+
+$("#btnPdf").addEventListener("click", async ()=>{
+  if(!carrito.length) return;
+  if(!$("#cliNom").value.trim()){
+    aviso("Escribe el nombre del cliente antes de generar la cotización.","warn",4);
+    $("#cliNom").focus(); return;
+  }
+  let blob, numero;
+  try{
+    blob = armarPDF();
+    numero = (S.get("cliente",{}).numero) || "";
+  }catch(e){ aviso("No se pudo generar el PDF: "+esc(e.message),"err",7); return; }
+
+  const limpio = String($("#cliNom").value).replace(/[^\wáéíóúñÁÉÍÓÚÑ ]+/g,"").trim().slice(0,28);
+  const nombre = "Cotizacion " + numero + (limpio ? " - " + limpio : "") + ".pdf";
+
+  try{
+    const archivo = new File([blob], nombre, {type:"application/pdf"});
+    if(navigator.canShare && navigator.canShare({files:[archivo]})){
+      await navigator.share({files:[archivo], title:"Cotización "+numero});
+      aviso("Cotización <b>"+numero+"</b> enviada.","ok",4);
+      return;
+    }
+  }catch(e){
+    if(e && e.name === "AbortError") return;          // la cerró ella misma
+  }
+  // Respaldo: abrir o descargar el archivo y dejar el texto listo para WhatsApp
+  const url = URL.createObjectURL(blob);
+  abrirHoja('<div class="hoja-tit">Cotización '+esc(numero)+'</div>'+
+    '<div class="hoja-sub">Este celular no permite compartir el archivo directamente.</div>'+
+    '<a class="btn btn-pri" href="'+url+'" download="'+esc(nombre)+'" style="text-decoration:none">Descargar el PDF</a>'+
+    '<a class="btn btn-sec" href="'+url+'" target="_blank" rel="noopener" style="text-decoration:none">Abrirlo para revisar</a>'+
+    '<div class="ayuda">Descárgalo y adjúntalo en WhatsApp como cualquier archivo.</div>');
+  setTimeout(()=>URL.revokeObjectURL(url), 120000);
+});
+
 $("#btnWa").addEventListener("click", ()=>{
   if(!carrito.length) return;
   const txt = textoCliente();
@@ -773,7 +901,8 @@ $("#btnCerrar").addEventListener("click", ()=>{
     carrito = [];
     S.set("cliente",{});
     guardar();
-    ["cliNom","cliCon","cliTel","cliNit","cliObs"].forEach(id => $("#"+id).value="");
+    ["cliNom","cliCon","cliTel","cliNit","cliObra","cliObs"].forEach(id => $("#"+id).value="");
+    $("#cliCiudad").value = cfg.ciudad || "";
     cerrarHoja(); refrescarBadges(); ir("ventas");
     aviso("Venta <b>"+esc(venta.id)+"</b> registrada por "+pesos(t2.venta)+".","ok",4);
     sincronizar(true);
@@ -1007,6 +1136,11 @@ function pintarAjustes(){
   $("#cfgCom").value = num(cfg.comision); $("#cfgDesc").value = num(cfg.descMax);
   $("#cfgUrl").value = cfg.url||"";       $("#cfgTok").value = cfg.token||"";
   $("#cfgWa").value  = cfg.wa||"";
+  $("#cfgCons").value = num(cfg.consecutivo); $("#cfgIva").value = num(cfg.iva);
+  $("#cfgCiudad").value = cfg.ciudad||"";  $("#cfgCargo").value = cfg.cargo||"";
+  $("#cfgPago").value = cfg.pago||"";      $("#cfgEntrega").value = cfg.entrega||"";
+  $("#cfgValidez").value = cfg.validez||""; $("#cfgDescuento").value = cfg.descuento||"";
+  $("#cfgPuesto").value = cfg.puesto||"";
   $("#infoCat").innerHTML =
     '<span class="pill-info">'+catalogo.length+' materiales</span>'+
     '<span class="pill-info">'+(categorias().length-1)+' categorías</span>'+
@@ -1023,6 +1157,15 @@ $("#btnGuardarCfg").addEventListener("click", ()=>{
   cfg.url       = $("#cfgUrl").value.trim();
   cfg.token     = $("#cfgTok").value.trim();
   cfg.wa        = $("#cfgWa").value.replace(/\D/g,"");
+  cfg.consecutivo = Math.max(1, Math.round(num($("#cfgCons").value)) || 1);
+  cfg.iva       = Math.min(50, Math.max(0, num($("#cfgIva").value)));
+  cfg.ciudad    = $("#cfgCiudad").value.trim();
+  cfg.cargo     = $("#cfgCargo").value.trim();
+  cfg.pago      = $("#cfgPago").value.trim();
+  cfg.entrega   = $("#cfgEntrega").value.trim();
+  cfg.validez   = $("#cfgValidez").value.trim();
+  cfg.descuento = $("#cfgDescuento").value.trim();
+  cfg.puesto    = $("#cfgPuesto").value.trim();
   const ok = S.set("cfg",cfg);
   encabezado(); pintarAjustes();
   aviso(ok?"Ajustes guardados.":"Ajustes aplicados, pero este navegador no los guarda.",ok?"ok":"warn",3);
