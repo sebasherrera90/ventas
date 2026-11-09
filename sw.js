@@ -1,7 +1,7 @@
 /* Ventas en Ruta — service worker.
    Guarda la app en el celular para que abra sin internet.
    Al publicar una version nueva, sube el numero de CACHE. */
-const CACHE = "ventas-ruta-v2";
+const CACHE = "ventas-ruta-v3";
 const ARCHIVOS = [
   "./",
   "./index.html",
@@ -32,6 +32,7 @@ self.addEventListener("fetch", ev => {
   if (req.method !== "GET") return;                 // los envios a la hoja van directo a la red
   const url = new URL(req.url);
   if (url.origin !== location.origin) return;       // nada externo se cachea
+  if (url.pathname.endsWith("catalogo.json")) return; // la lista va siempre a la red
 
   ev.respondWith(
     caches.match(req).then(hit => {

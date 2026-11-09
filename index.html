@@ -300,6 +300,12 @@
     <div id="infoCat" style="margin-bottom:10px"></div>
     <div class="campo"><label for="archCsv">Cargar lista nueva (archivo CSV)</label>
       <input id="archCsv" type="file" accept=".csv,text/csv,.txt"></div>
+    <button class="btn btn-sec" id="btnBajarCat">Buscar lista actualizada</button>
+    <div class="ayuda">
+      Lo normal es que la lista llegue sola con la app. Lo de abajo es el camino manual,
+      por si hay que cargar un archivo a mano.
+    </div>
+    <div class="divisor" style="margin:14px 0"></div>
     <div class="ayuda">
       Columnas requeridas, en este orden:
       <code>codigo</code> <code>nombre</code> <code>unidad</code> <code>categoria</code>
@@ -367,7 +373,8 @@ const CAT_DEMO = [
 
 const CFG_DEF = {
   vendedora:"", empresa:"", comision:10, descMax:15,
-  url:"", token:"", wa:"", catalogoPropio:false, catalogoNombre:""
+  url:"", token:"", wa:"", catalogoPropio:false, catalogoNombre:"",
+  clave:"", catalogoVersion:""
 };
 
 /* ---------- Almacenamiento resistente ---------- */
@@ -983,7 +990,7 @@ $("#btnProbar").addEventListener("click", async ()=>{
   }
 });
 
-window.addEventListener("online",  ()=>{ estadoConexion(); sincronizar(true); });
+window.addEventListener("online",  ()=>{ estadoConexion(); sincronizar(true); bajarCatalogo(false); });
 window.addEventListener("offline", estadoConexion);
 function estadoConexion(){
   const on = navigator.onLine;
@@ -1085,6 +1092,75 @@ function aNumero(v){
 const limpiaCab = s => String(s||"").toLowerCase().trim()
   .normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^a-z0-9]+/g,"_").replace(/^_|_$/g,"");
 
+function interpretarCSV(crudo){
+  const filas = partirCSV(crudo);
+  if(filas.length < 2) throw new Error("El archivo no tiene filas de datos.");
+  const cab = filas[0].map(limpiaCab);
+  const buscar = (...alias) => {
+    for(const a of alias){ const i = cab.indexOf(a); if(i>-1) return i; }
+    return -1;
+  };
+  const col = {
+    codigo: buscar("codigo","code","ref","referencia","item"),
+    nombre: buscar("nombre","material","descripcion","producto"),
+    unidad: buscar("unidad","und","um","unidad_medida"),
+    categ:  buscar("categoria","grupo","linea","familia"),
+    costo:  buscar("costo","costo_unitario","precio_lista","precio_empresa","valor_lista"),
+    venta:  buscar("precio_venta","venta","precio_publico","pvp","precio"),
+    minimo: buscar("precio_minimo","minimo","piso","precio_min"),
+    activo: buscar("activo","estado","disponible","vigente")
+  };
+  if(col.nombre<0 || col.costo<0 || col.venta<0)
+    throw new Error("Faltan columnas obligatorias: se necesitan al menos nombre, costo y precio_venta.");
+
+  const nuevo = [], malas = []; let bajas = 0;
+  filas.slice(1).forEach((fila,k) => {
+    const nombre = String(fila[col.nombre]||"").trim();
+    if(!nombre) return;
+    if(col.activo > -1){
+      const a = String(fila[col.activo]||"").trim().toLowerCase()
+                  .normalize("NFD").replace(/[̀-ͯ]/g,"");
+      if(["no","0","inactivo","falso","false","n","agotado","baja"].includes(a)){ bajas++; return; }
+    }
+    const costo = aNumero(fila[col.costo]), venta = aNumero(fila[col.venta]);
+    const min = col.minimo>-1 ? aNumero(fila[col.minimo]) : 0;
+    if(venta <= 0){ malas.push(k+2); return; }
+    nuevo.push({
+      codigo: (col.codigo>-1 && String(fila[col.codigo]||"").trim()) || ("IT-"+(k+1)),
+      nombre: nombre,
+      unidad: (col.unidad>-1 && String(fila[col.unidad]||"").trim()) || "und",
+      categoria: (col.categ>-1 && String(fila[col.categ]||"").trim()) || "Sin categoría",
+      costo: costo, precio_venta: venta,
+      precio_minimo: min>0 ? min : Math.max(costo, Math.round(venta*(1-num(cfg.descMax)/100)))
+    });
+  });
+  if(!nuevo.length) throw new Error("No se encontró ningún material válido.");
+  return {nuevo:nuevo, malas:malas, bajas:bajas};
+}
+
+function resumenLista(res){
+  const n = res.nuevo;
+  return '<table class="mini-t" style="margin-top:12px">'+
+    '<tr><td>Materiales leídos</td><td>'+n.length+'</td></tr>'+
+    '<tr><td>Categorías</td><td>'+new Set(n.map(m=>m.categoria)).size+'</td></tr>'+
+    (res.malas.length?'<tr><td>Filas sin precio (omitidas)</td><td>'+res.malas.length+'</td></tr>':'')+
+    (res.bajas?'<tr><td>Marcados como no activos</td><td>'+res.bajas+'</td></tr>':'')+
+    '<tr><td>Primer material</td><td>'+esc(n[0].nombre)+'</td></tr>'+
+    '<tr><td>Precio de venta</td><td>'+pesos(n[0].precio_venta)+'</td></tr>'+
+    '<tr><td>Costo</td><td>'+pesos(n[0].costo)+'</td></tr>'+
+  '</table>';
+}
+
+function aplicarCatalogo(lista, etiqueta, version){
+  catalogo = lista;
+  cfg.catalogoPropio = true;
+  cfg.catalogoNombre = etiqueta;
+  if(version !== undefined) cfg.catalogoVersion = version;
+  S.set("catalogo", catalogo); S.set("cfg", cfg);
+  catSel = "Todas";
+  pintarCats(); pintarMat(); pintarAjustes(); encabezado();
+}
+
 $("#archCsv").addEventListener("change", ev => {
   const f = ev.target.files && ev.target.files[0];
   if(!f) return;
@@ -1094,70 +1170,19 @@ $("#archCsv").addEventListener("change", ev => {
     try{
       const crudo = (typeof lector.result === "string")
         ? repararTexto(lector.result) : decodificar(lector.result);
-      const filas = partirCSV(crudo);
-      if(filas.length < 2) throw new Error("El archivo no tiene filas de datos.");
-      const cab = filas[0].map(limpiaCab);
-      const col = {};
-      const buscar = (...alias) => {
-        for(const a of alias){ const i = cab.indexOf(a); if(i>-1) return i; }
-        return -1;
-      };
-      col.codigo  = buscar("codigo","code","ref","referencia","item");
-      col.nombre  = buscar("nombre","material","descripcion","producto");
-      col.unidad  = buscar("unidad","und","um","unidad_medida");
-      col.categ   = buscar("categoria","grupo","linea","familia");
-      col.costo   = buscar("costo","costo_unitario","precio_lista","precio_empresa","valor_lista");
-      col.venta   = buscar("precio_venta","venta","precio_publico","pvp","precio");
-      col.minimo  = buscar("precio_minimo","minimo","piso","precio_min");
-      col.activo  = buscar("activo","estado","disponible","vigente");
-      if(col.nombre<0 || col.costo<0 || col.venta<0)
-        throw new Error("Faltan columnas obligatorias: se necesitan al menos nombre, costo y precio_venta.");
-
-      const nuevo = [], malas = []; let bajas = 0;
-      filas.slice(1).forEach((f,k) => {
-        const nombre = String(f[col.nombre]||"").trim();
-        if(!nombre) return;
-        if(col.activo > -1){
-          const a = String(f[col.activo]||"").trim().toLowerCase()
-                      .normalize("NFD").replace(/[̀-ͯ]/g,"");
-          if(["no","0","inactivo","falso","false","n","agotado","baja"].includes(a)){ bajas++; return; }
-        }
-        const costo = aNumero(f[col.costo]), venta = aNumero(f[col.venta]);
-        const min = col.minimo>-1 ? aNumero(f[col.minimo]) : 0;
-        if(venta <= 0){ malas.push(k+2); return; }
-        nuevo.push({
-          codigo: (col.codigo>-1 && String(f[col.codigo]||"").trim()) || ("IT-"+(k+1)),
-          nombre: nombre,
-          unidad: (col.unidad>-1 && String(f[col.unidad]||"").trim()) || "und",
-          categoria: (col.categ>-1 && String(f[col.categ]||"").trim()) || "Sin categoría",
-          costo: costo, precio_venta: venta,
-          precio_minimo: min>0 ? min : Math.max(costo, Math.round(venta*(1-num(cfg.descMax)/100)))
-        });
-      });
-      if(!nuevo.length) throw new Error("No se encontró ningún material válido.");
-
+      const res = interpretarCSV(crudo);
       abrirHoja('<div class="hoja-tit">Revisar la lista</div>'+
         '<div class="hoja-sub">'+esc(f.name)+'</div>'+
-        '<table class="mini-t" style="margin-top:12px">'+
-          '<tr><td>Materiales leídos</td><td>'+nuevo.length+'</td></tr>'+
-          '<tr><td>Categorías</td><td>'+new Set(nuevo.map(m=>m.categoria)).size+'</td></tr>'+
-          (malas.length?'<tr><td>Filas sin precio (omitidas)</td><td>'+malas.length+'</td></tr>':'')+
-          (bajas?'<tr><td>Marcados como no activos</td><td>'+bajas+'</td></tr>':'')+
-          '<tr><td>Primer material</td><td>'+esc(nuevo[0].nombre)+'</td></tr>'+
-          '<tr><td>Precio de venta</td><td>'+pesos(nuevo[0].precio_venta)+'</td></tr>'+
-          '<tr><td>Costo</td><td>'+pesos(nuevo[0].costo)+'</td></tr>'+
-        '</table>'+
+        resumenLista(res)+
         '<div class="ayuda">Verifica que los precios estén completos (sin cortar los miles). '+
           'Si algo quedó mal, cancela y revisa el separador decimal del Excel.</div>'+
         '<button class="btn btn-pri" id="catOk">Usar esta lista</button>'+
         '<button class="btn btn-gris" id="catNo">Cancelar</button>');
       $("#catNo").addEventListener("click", ()=>{ $("#archCsv").value=""; cerrarHoja(); });
       $("#catOk").addEventListener("click", ()=>{
-        catalogo = nuevo; cfg.catalogoPropio = true; cfg.catalogoNombre = f.name;
-        S.set("catalogo",catalogo); S.set("cfg",cfg);
-        catSel = "Todas"; $("#archCsv").value="";
-        cerrarHoja(); pintarCats(); pintarMat(); pintarAjustes(); encabezado();
-        aviso("Lista cargada: <b>"+nuevo.length+"</b> materiales.","ok",5);
+        aplicarCatalogo(res.nuevo, f.name, "");
+        $("#archCsv").value=""; cerrarHoja();
+        aviso("Lista cargada: <b>"+res.nuevo.length+"</b> materiales.","ok",5);
       });
     }catch(e){
       aviso("No se pudo cargar: "+esc(e.message),"err",8);
@@ -1167,6 +1192,76 @@ $("#archCsv").addEventListener("change", ev => {
   if(typeof TextDecoder !== "undefined" && lector.readAsArrayBuffer) lector.readAsArrayBuffer(f);
   else lector.readAsText(f, "UTF-8");
 });
+
+/* =========================================================================
+   LISTA CIFRADA PUBLICADA CON LA APP
+   El archivo catalogo.json viaja cifrado. La vendedora escribe la clave una
+   sola vez; desde ahi cada version nueva entra sola.
+   ========================================================================= */
+const deB64 = s => { const b = atob(s), u = new Uint8Array(b.length);
+  for(let i=0;i<b.length;i++) u[i] = b.charCodeAt(i); return u; };
+
+async function descifrar(paq, clave){
+  const enc = new TextEncoder();
+  const base = await crypto.subtle.importKey("raw", enc.encode(clave), "PBKDF2", false, ["deriveKey"]);
+  const k = await crypto.subtle.deriveKey(
+    {name:"PBKDF2", salt:deB64(paq.salt), iterations:num(paq.iter)||310000, hash:"SHA-256"},
+    base, {name:"AES-GCM", length:256}, false, ["decrypt"]);
+  const claro = await crypto.subtle.decrypt({name:"AES-GCM", iv:deB64(paq.iv)}, k, deB64(paq.datos));
+  return new TextDecoder("utf-8").decode(claro);
+}
+
+async function usarPaquete(paq, clave){
+  try{
+    const res = interpretarCSV(await descifrar(paq, clave));
+    cfg.clave = clave;
+    aplicarCatalogo(res.nuevo, "lista publicada", paq.version || "");
+    aviso("Lista de precios actualizada: <b>"+res.nuevo.length+"</b> materiales.","ok",5);
+    return true;
+  }catch(e){ return false; }
+}
+
+function pedirClave(paq){
+  abrirHoja('<div class="hoja-tit">Clave de la lista de precios</div>'+
+    '<div class="hoja-sub">Se escribe una sola vez. Te la da tu jefe.</div>'+
+    '<div class="campo" style="margin-top:16px"><label for="cvClave">Clave</label>'+
+      '<input id="cvClave" type="password" autocomplete="current-password" '+
+      'style="font-size:18px;padding:14px"></div>'+
+    '<div id="cvMsg"></div>'+
+    '<button class="btn btn-pri" id="cvOk">Abrir la lista</button>'+
+    '<button class="btn btn-gris" id="cvNo">Ahora no</button>');
+  const intentar = async ()=>{
+    const c = $("#cvClave").value;
+    if(!c) return;
+    $("#cvOk").disabled = true;
+    $("#cvMsg").innerHTML = '<div class="ayuda">Abriendo la lista…</div>';
+    if(await usarPaquete(paq, c)) cerrarHoja();
+    else {
+      $("#cvMsg").innerHTML = '<div class="alerta-min">Esa clave no abre la lista. '+
+        'Revisa mayúsculas y guiones.</div>';
+      $("#cvOk").disabled = false;
+    }
+  };
+  $("#cvNo").addEventListener("click", cerrarHoja);
+  $("#cvOk").addEventListener("click", intentar);
+  $("#cvClave").addEventListener("keydown", e => { if(e.key === "Enter") intentar(); });
+  setTimeout(()=>{ const i = $("#cvClave"); if(i) i.focus(); }, 250);
+}
+
+async function bajarCatalogo(forzar){
+  if(!navigator.onLine || !(window.crypto && crypto.subtle)) return;
+  let paq = null;
+  try{
+    const r = await fetch("catalogo.json?v="+Date.now(), {cache:"no-store"});
+    if(!r.ok) return;                       // todavia no hay lista publicada
+    paq = await r.json();
+  }catch(e){ return; }
+  if(!paq || !paq.datos || !paq.salt || !paq.iv) return;
+  if(!forzar && cfg.catalogoPropio && cfg.catalogoVersion === paq.version) return;
+  if(cfg.clave && await usarPaquete(paq, cfg.clave)) return;
+  if(cfg.clave){ cfg.clave = ""; S.set("cfg", cfg); }   // cambiaron la clave
+  pedirClave(paq);
+}
 $("#btnRestCat").addEventListener("click", ()=>{
   abrirHoja('<div class="hoja-tit">¿Volver a la lista de ejemplo?</div>'+
     '<div class="hoja-sub">Se reemplazan los '+catalogo.length+' materiales actuales. Las ventas no se tocan.</div>'+
@@ -1221,7 +1316,13 @@ function iniciar(){
     navigator.serviceWorker.register("sw.js").catch(()=>{});
   }
   if(pendientes().length) setTimeout(()=>sincronizar(true), 1500);
+  setTimeout(()=>bajarCatalogo(false), 600);
 }
+$("#btnBajarCat").addEventListener("click", ()=>{
+  if(!navigator.onLine){ aviso("Sin señal: conéctate para buscar la lista.","warn",4); return; }
+  aviso("Buscando lista actualizada…","info",3);
+  bajarCatalogo(true);
+});
 iniciar();
 </script>
 </body>

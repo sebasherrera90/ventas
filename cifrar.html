@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cifrar lista de precios</title>
+<style>
+  :root{--azul:#0b4f6c;--azul-osc:#073a50;--azul-cl:#e8f2f7;--verde:#0f7b56;--verde-cl:#e6f4ef;
+    --ambar:#b45309;--ambar-cl:#fdf3e3;--rojo:#b42318;--rojo-cl:#fdeceb;
+    --tinta:#11212b;--gris:#5c6b74;--linea:#dde5ea;--fondo:#f4f7f9}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--fondo);color:var(--tinta);font-size:16px;line-height:1.5;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif}
+  header{background:var(--azul);color:#fff;padding:22px 20px}
+  header h1{margin:0;font-size:21px}
+  header p{margin:4px 0 0;opacity:.85;font-size:14px}
+  main{max-width:720px;margin:0 auto;padding:20px}
+  .caja{background:#fff;border:1px solid var(--linea);border-radius:14px;padding:18px;margin-bottom:14px}
+  h2{font-size:13px;text-transform:uppercase;letter-spacing:.8px;color:var(--gris);margin:0 0 12px}
+  label{display:block;font-size:12px;text-transform:uppercase;letter-spacing:.5px;
+    color:var(--gris);font-weight:700;margin-bottom:5px}
+  input[type=file],input[type=text],input[type=password]{width:100%;padding:12px;
+    border:1.5px solid var(--linea);border-radius:10px;font-size:16px;font-family:inherit}
+  input:focus{outline:none;border-color:var(--azul)}
+  button{width:100%;padding:15px;border:0;border-radius:12px;font-size:16px;font-weight:700;
+    background:var(--azul);color:#fff;cursor:pointer;margin-top:14px;font-family:inherit}
+  button:disabled{opacity:.45;cursor:default}
+  button.sec{background:#fff;color:var(--azul);border:1.5px solid var(--azul)}
+  .aviso{padding:12px 14px;border-radius:10px;font-size:14px;border-left:4px solid;margin-top:12px}
+  .ok{background:var(--verde-cl);border-color:var(--verde);color:#0a5a3f}
+  .err{background:var(--rojo-cl);border-color:var(--rojo);color:#7a1d14}
+  .info{background:var(--azul-cl);border-color:var(--azul);color:#0a3f58}
+  .warn{background:var(--ambar-cl);border-color:var(--ambar);color:#6b3a06}
+  .ayuda{font-size:13px;color:var(--gris);margin-top:8px}
+  ol{margin:8px 0 0;padding-left:20px;font-size:14px;color:var(--gris)}
+  ol li{margin-bottom:5px}
+  .fila{display:flex;gap:12px}
+  .fila>div{flex:1}
+  .fuerza{height:6px;border-radius:3px;background:var(--linea);margin-top:8px;overflow:hidden}
+  .fuerza i{display:block;height:100%;width:0;transition:width .2s,background .2s}
+</style>
+</head>
+<body>
+<header>
+  <h1>Cifrar la lista de precios</h1>
+  <p>Todo ocurre en este computador. Ni el archivo ni la clave salen de aquí.</p>
+</header>
+
+<main>
+  <div class="caja">
+    <h2>Cómo funciona</h2>
+    <ol>
+      <li>Escoges el CSV exportado de la hoja BASE.</li>
+      <li>Inventas una clave. <b>Esa clave no se guarda en ninguna parte</b>: si la pierdes, hay que cifrar la lista otra vez.</li>
+      <li>Se descarga <code>catalogo.json</code>, que es la lista cifrada. Ese archivo sí se puede compartir sin riesgo.</li>
+      <li>Me lo mandas, lo publico, y la vendedora escribe la clave una sola vez al abrir la app.</li>
+    </ol>
+  </div>
+
+  <div class="caja">
+    <h2>1. La lista</h2>
+    <label for="arch">Archivo CSV de la hoja BASE</label>
+    <input id="arch" type="file" accept=".csv,text/csv,.txt">
+    <div id="infoArch"></div>
+  </div>
+
+  <div class="caja">
+    <h2>2. La clave</h2>
+    <div class="fila">
+      <div>
+        <label for="cl1">Clave</label>
+        <input id="cl1" type="password" autocomplete="new-password" spellcheck="false">
+      </div>
+      <div>
+        <label for="cl2">Repetir</label>
+        <input id="cl2" type="password" autocomplete="new-password" spellcheck="false">
+      </div>
+    </div>
+    <div class="fuerza"><i id="barra"></i></div>
+    <div class="ayuda" id="txtFuerza">
+      Usa tres o cuatro palabras que no tengan que ver entre sí, por ejemplo
+      <b>tuberia-naranja-martes</b>. Una clave corta se puede adivinar probando millones de
+      combinaciones contra el archivo cifrado; una de varias palabras, no.
+    </div>
+  </div>
+
+  <div class="caja">
+    <h2>3. Generar</h2>
+    <label for="ver">Nombre de esta versión (para saber cuál es la más nueva)</label>
+    <input id="ver" type="text" placeholder="por ejemplo: precios noviembre 2026">
+    <button id="btn" disabled>Cifrar y descargar</button>
+    <div id="salida"></div>
+  </div>
+</main>
+
+<script>
+"use strict";
+const $ = s => document.querySelector(s);
+let csvTexto = "", nFilas = 0;
+
+/* ---- lectura del CSV, con la misma reparación de tildes de la app ---- */
+const MOJI = {"Ã¡":"á","Ã©":"é","Ã­":"í","Ã³":"ó","Ãº":"ú","Ã±":"ñ","Ã¼":"ü",
+  "Ã\u0081":"Á","Ã‰":"É","Ã\u008d":"Í","Ã“":"Ó","Ãš":"Ú","Ã'":"Ñ","Ãœ":"Ü",
+  "Â°":"°","Âº":"º","Âª":"ª","Â²":"²","Â³":"³","Â¿":"¿","Â¡":"¡","Â´":"´",
+  "Â½":"½","Â¼":"¼","Â¾":"¾","Â ":" "};
+function repararTexto(t){
+  if(!/[ÃÂâ][\u0080-¿]/.test(t)) return t;
+  let soloBytes = true;
+  for(let i=0;i<t.length;i++){ if(t.charCodeAt(i)>255){ soloBytes=false; break; } }
+  if(soloBytes){
+    try{
+      const b = new Uint8Array(t.length);
+      for(let i=0;i<t.length;i++) b[i] = t.charCodeAt(i);
+      return new TextDecoder("utf-8",{fatal:true}).decode(b);
+    }catch(e){}
+  }
+  return t.replace(/[ÃÂâ][\u0080-¿][\u0080-¿]?/g, s => MOJI[s] || MOJI[s.slice(0,2)] || s);
+}
+function decodificar(buf){
+  try{ return repararTexto(new TextDecoder("utf-8",{fatal:true}).decode(buf)); }
+  catch(e){ return repararTexto(new TextDecoder("windows-1252").decode(buf)); }
+}
+
+$("#arch").addEventListener("change", ev => {
+  const f = ev.target.files && ev.target.files[0];
+  if(!f){ csvTexto=""; revisar(); return; }
+  const fr = new FileReader();
+  fr.onerror = () => { $("#infoArch").innerHTML = '<div class="aviso err">No se pudo leer el archivo.</div>'; };
+  fr.onload = () => {
+    csvTexto = decodificar(fr.result);
+    nFilas = csvTexto.split("\n").filter(l => l.trim()).length - 1;
+    const cab = csvTexto.split("\n")[0] || "";
+    const faltan = ["nombre","costo","precio_venta"].filter(c => cab.toLowerCase().indexOf(c) < 0);
+    $("#infoArch").innerHTML = faltan.length
+      ? '<div class="aviso err">Al archivo le faltan columnas: <b>'+faltan.join(", ")+
+        '</b>. ¿Exportaste la hoja BASE?</div>'
+      : '<div class="aviso ok"><b>'+nFilas+'</b> filas leídas de <b>'+f.name+'</b>.</div>';
+    if(faltan.length) csvTexto = "";
+    revisar();
+  };
+  fr.readAsArrayBuffer(f);
+});
+
+/* ---- fuerza de la clave ---- */
+function fuerza(c){
+  if(!c) return 0;
+  let p = Math.min(c.length * 4, 55);
+  if(/[a-z]/.test(c) && /[A-Z]/.test(c)) p += 10;
+  if(/\d/.test(c)) p += 8;
+  if(/[^A-Za-z0-9]/.test(c)) p += 12;
+  const palabras = c.split(/[\s\-_.]+/).filter(x => x.length > 2).length;
+  if(palabras >= 3) p += 20;
+  if(c.length < 8) p = Math.min(p, 25);
+  return Math.min(p, 100);
+}
+function pintarFuerza(){
+  const p = fuerza($("#cl1").value);
+  const b = $("#barra");
+  b.style.width = p + "%";
+  b.style.background = p < 40 ? "var(--rojo)" : p < 70 ? "var(--ambar)" : "var(--verde)";
+}
+$("#cl1").addEventListener("input", () => { pintarFuerza(); revisar(); });
+$("#cl2").addEventListener("input", revisar);
+
+function revisar(){
+  const c1 = $("#cl1").value, c2 = $("#cl2").value;
+  $("#btn").disabled = !(csvTexto && c1.length >= 8 && c1 === c2);
+}
+
+/* ---- cifrado ---- */
+const b64 = u8 => btoa(String.fromCharCode.apply(null, u8));
+const ITER = 310000;
+
+$("#btn").addEventListener("click", async () => {
+  const clave = $("#cl1").value;
+  if(fuerza(clave) < 40 &&
+     !confirm("Esa clave es débil y el archivo cifrado queda expuesto a que la adivinen probando combinaciones. ¿Seguir de todas formas?")) return;
+  $("#btn").disabled = true;
+  $("#salida").innerHTML = '<div class="aviso info">Cifrando…</div>';
+  try{
+    const enc = new TextEncoder();
+    const salt = crypto.getRandomValues(new Uint8Array(16));
+    const iv   = crypto.getRandomValues(new Uint8Array(12));
+    const base = await crypto.subtle.importKey("raw", enc.encode(clave), "PBKDF2", false, ["deriveKey"]);
+    const k = await crypto.subtle.deriveKey(
+      {name:"PBKDF2", salt:salt, iterations:ITER, hash:"SHA-256"},
+      base, {name:"AES-GCM", length:256}, false, ["encrypt"]);
+    const ct = new Uint8Array(await crypto.subtle.encrypt({name:"AES-GCM", iv:iv}, k, enc.encode(csvTexto)));
+
+    const paquete = {
+      v: 1,
+      version: ($("#ver").value.trim() || new Date().toISOString().slice(0,10)),
+      generado: new Date().toISOString(),
+      filas: nFilas,
+      kdf: "PBKDF2-SHA256",
+      iter: ITER,
+      salt: b64(salt),
+      iv: b64(iv),
+      datos: b64(ct)
+    };
+    const blob = new Blob([JSON.stringify(paquete)], {type:"application/json"});
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "catalogo.json";
+    document.body.appendChild(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+
+    $("#salida").innerHTML =
+      '<div class="aviso ok"><b>Listo.</b> Se descargó <code>catalogo.json</code> con '+nFilas+
+      ' materiales, versión "'+paquete.version.replace(/</g,"&lt;")+'".</div>'+
+      '<div class="aviso warn"><b>Guarda la clave donde no se te pierda.</b> No quedó registrada '+
+      'en ninguna parte: sin ella, ni yo ni nadie puede abrir ese archivo, y tocaría cifrar la lista de nuevo.</div>'+
+      '<div class="aviso info">Ya puedes mandarme <code>catalogo.json</code> por el chat. '+
+      'Va cifrado, así que compartirlo no expone tus costos.</div>';
+  }catch(e){
+    $("#salida").innerHTML = '<div class="aviso err">No se pudo cifrar: '+
+      String(e.message).replace(/</g,"&lt;")+'</div>';
+  }
+  $("#btn").disabled = false;
+});
+
+if(!(window.crypto && crypto.subtle)){
+  document.querySelector("main").insertAdjacentHTML("afterbegin",
+    '<div class="aviso err">Este navegador no permite cifrar. Abre la página con Chrome, '+
+    'Edge o Firefox actualizados, y por https.</div>');
+}
+</script>
+</body>
+</html>
