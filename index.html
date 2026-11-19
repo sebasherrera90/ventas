@@ -420,6 +420,9 @@
 
   <div class="divisor"></div>
   <button class="btn btn-pri" id="btnGuardarCfg">Guardar ajustes</button>
+  <button class="btn btn-sec" id="btnActualizarApp">Buscar versión nueva de la app</button>
+  <div class="ayuda">Úsalo si te dijeron que hay una mejora y no la ves. No borra la lista de
+    precios, ni la clave, ni las ventas guardadas.</div>
   <div class="ayuda" style="text-align:center;margin-top:14px" id="pieInfo"></div>
 </section>
 
@@ -477,6 +480,7 @@
 <script src="pdf-cotizacion.js"></script>
 <script>
 "use strict";
+const VERSION = "14";   // sube con cada publicación, junto al CACHE de sw.js
 /* =========================================================================
    Ventas en Ruta — app de venta en frío, 100% offline.
    Los datos viven en el celular (localStorage). Las ventas se encolan y
@@ -1363,7 +1367,7 @@ function pintarAjustes(){
     '<span class="pill-info">'+(categorias().length-1)+' categorías</span>'+
     '<span class="pill-info">'+(cfg.catalogoPropio
       ? esc(cfg.catalogoNombre||"lista cargada") : "lista de ejemplo")+'</span>';
-  $("#pieInfo").innerHTML = "Ventas en Ruta · v1.0<br>"+
+  $("#pieInfo").innerHTML = "Ventas en Ruta · versión "+VERSION+"<br>"+
     ventas.length+" ventas guardadas en este celular · "+pendientes().length+" por enviar";
 }
 $("#btnGuardarCfg").addEventListener("click", ()=>{
@@ -1744,6 +1748,27 @@ function iniciar(){
   if(!cfg.catalogoPropio && navigator.onLine && window.crypto && crypto.subtle) bloqueoEsperando();
   setTimeout(()=>bajarCatalogo(false), 120);
 }
+/* Borra la copia guardada de la app y recarga. No toca localStorage, asi
+   que la lista de precios, la clave y las ventas pendientes se conservan. */
+$("#btnActualizarApp").addEventListener("click", async ()=>{
+  if(!navigator.onLine){
+    aviso("Sin señal: conéctate para buscar la versión nueva.","warn",4); return;
+  }
+  const esperando = aviso("Buscando versión nueva…","info",0);
+  try{
+    if("serviceWorker" in navigator){
+      const regs = await navigator.serviceWorker.getRegistrations();
+      for(const r of regs) await r.unregister();
+    }
+    if(window.caches){
+      for(const k of await caches.keys()) await caches.delete(k);
+    }
+  }catch(e){ /* si algo falla, la recarga de abajo igual ayuda */ }
+  esperando.remove();
+  aviso("Listo. Recargando la app…","ok",3);
+  setTimeout(()=>location.reload(), 700);
+});
+
 $("#btnBajarCat").addEventListener("click", ()=>{
   if(!navigator.onLine){ aviso("Sin señal: conéctate para buscar la lista.","warn",4); return; }
   aviso("Buscando lista actualizada…","info",3);
