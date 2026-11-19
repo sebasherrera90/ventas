@@ -197,6 +197,14 @@
     align-items:center;justify-content:center;padding:22px;overflow-y:auto}
   .bloqueo.ver{display:flex}
   body.bloqueado{overflow:hidden}
+  /* no basta con taparlo: hay que sacarlo de la página, o con Tab o con
+     lector de pantalla se llega al catálogo que está detrás */
+  body.bloqueado > header,
+  body.bloqueado > nav,
+  body.bloqueado > .vista,
+  body.bloqueado > #avisos,
+  body.bloqueado > .hoja,
+  body.bloqueado > .fondo-modal{display:none !important}
   .bq-caja{background:#fff;border-radius:18px;width:100%;max-width:420px;
     padding:26px 22px calc(24px + var(--safe-b));box-shadow:0 12px 44px rgba(0,0,0,.28)}
   .bq-marca{font-size:11.5px;text-transform:uppercase;letter-spacing:1.3px;
