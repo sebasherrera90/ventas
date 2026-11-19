@@ -244,7 +244,7 @@ function generarCotizacionPDF(d){
     ["MATERIAL PUESTO: ", c.material]
   ].filter(x => x[1]);
   const firma = d.firma || {};
-  const altoCond = 8 + cond.length * 11 + 26 + (firma.nombre ? 22 : 0);
+  const altoCond = 8 + cond.length * 11 + (firma.nombre ? 48 : 0);
   if(y + altoCond + (hayPie ? altoPie : 0) > limiteInf) nuevaPagina();
   y += 7;
   cond.forEach(f => {
@@ -252,15 +252,17 @@ function generarCotizacionPDF(d){
     lineas.forEach((ln, k) => L.texto(ln, MX + 5, y + 8 + k*10, T_COND, "F4"));
     y += lineas.length * 10 + 1;
   });
-  y += 12;
-  L.texto("CORDIALMENTE,", MX + 5, y + 8, T_COND, "F4");
-  y += 20;
+  // Sin nombre no se imprime nada: un "CORDIALMENTE," suelto queda peor
+  // que no poner despedida.
   if(firma.nombre){
+    y += 12;
+    L.texto("CORDIALMENTE,", MX + 5, y + 8, T_COND, "F4");
+    y += 20;
     L.texto(String(firma.nombre).toUpperCase(), MX + 5, y + 8, T_COND, "F4");
     y += 11;
     if(firma.cargo){ L.texto(String(firma.cargo).toUpperCase(), MX + 5, y + 8, T_COND, "F4"); y += 11; }
+    y += 10;
   }
-  y += 10;
 
   /* --- pie --- */
   if(hayPie){
