@@ -517,8 +517,10 @@ const CFG_DEF = {
    esas mandan y se puede cambiar el agrupamiento desde el Excel.
    ========================================================================= */
 const MAPA_GRUPOS = {
-  "hidrantes":                              ["Hidrantes", "Generales"],
-  "hidrantes - aplicaciones especiales":    ["Hidrantes", "Aplicaciones especiales"],
+  "hidrantes":                              ["Válvulas, hidrantes y bridas", "Hidrantes"],
+  "hidrantes - aplicaciones especiales":    ["Válvulas, hidrantes y bridas", "Hidrantes especiales"],
+  "bridas":                                 ["Válvulas, hidrantes y bridas", "Bridas"],
+  "valvulas compuerta elastica":            ["Válvulas, hidrantes y bridas", "Válvulas compuerta elástica"],
   "tees":                                   ["Tees", "Generales"],
   "tees hibridas para ventosa":             ["Tees", "Híbridas para ventosa"],
 
@@ -560,9 +562,9 @@ const sinTildes = s => String(s||"").toLowerCase().trim()
    cada material, esta regla deja de aplicarse sola. */
 const REGLAS_NOMBRE = {
   "valvulas, hidrantes y bridas": [
-    [/hidrante/,                          "Hidrantes", "Generales"],
-    [/valvula ce|valvula c\.e|compuerta/, "Válvulas compuerta elástica", ""],
-    [/brida/,                             "Bridas", ""],
+    [/hidrante/,                          "Válvulas, hidrantes y bridas", "Hidrantes"],
+    [/valvula ce|valvula c\.e|compuerta/, "Válvulas, hidrantes y bridas", "Válvulas compuerta elástica"],
+    [/brida/,                             "Válvulas, hidrantes y bridas", "Bridas"],
     [/acople|dresser|galapago|union/,     "Uniones y adaptadores", ""]
   ]
 };
