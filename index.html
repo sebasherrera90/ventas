@@ -552,9 +552,30 @@ const MAPA_GRUPOS = {
 const sinTildes = s => String(s||"").toLowerCase().trim()
   .normalize("NFD").replace(/[̀-ͯ]/g,"");
 
+/* Los 40 materiales de Metacol llegaron en una sola categoría que mezcla
+   cosas distintas. Se reparten por el nombre en los grupos que ya existen,
+   en este orden. Cuando la base publicada traiga la categoría corregida en
+   cada material, esta regla deja de aplicarse sola. */
+const REGLAS_NOMBRE = {
+  "valvulas, hidrantes y bridas": [
+    [/hidrante/,                          "Hidrantes", "Generales"],
+    [/valvula ce|valvula c\.e|compuerta/, "Válvulas compuerta elástica", ""],
+    [/brida/,                             "Bridas", ""],
+    [/acople|dresser|galapago|union/,     "Uniones y adaptadores", ""]
+  ]
+};
+
 function conGrupo(m){
   if(m.grupo) return m;                                   // ya viene del archivo
-  const par = MAPA_GRUPOS[sinTildes(m.categoria)];
+  const cat = sinTildes(m.categoria);
+  const reglas = REGLAS_NOMBRE[cat];
+  if(reglas){
+    const nom = sinTildes(m.nombre);
+    for(let i = 0; i < reglas.length; i++){
+      if(reglas[i][0].test(nom)){ m.grupo = reglas[i][1]; m.sub = reglas[i][2] || ""; return m; }
+    }
+  }
+  const par = MAPA_GRUPOS[cat];
   m.grupo = par ? par[0] : (m.categoria || "Sin categoría");
   m.sub   = par ? par[1] : "";
   return m;
@@ -711,7 +732,10 @@ function pintarSubcats(){
   if(subs.length < 2){                      // un solo subgrupo no merece una fila
     caja.className = "cats subcats"; caja.innerHTML = ""; return;
   }
-  const total = subs.reduce((t,k)=>t+c[k], 0);
+  // el total del grupo, no la suma de los subgrupos: si algún material
+  // quedara sin subgrupo, las dos filas mostrarían números distintos
+  let total = 0;
+  catalogo.forEach(m => { if(m.grupo === grupoSel) total++; });
   caja.innerHTML = chip("Todas", total, subSel==="Todas", "data-s") +
     subs.map(s => chip(s, c[s], s===subSel, "data-s")).join("");
   caja.className = "cats subcats ver";
