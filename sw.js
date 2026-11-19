@@ -1,7 +1,7 @@
 /* Ventas en Ruta — service worker.
    Guarda la app en el celular para que abra sin internet.
    Al publicar una version nueva, sube el numero de CACHE. */
-const CACHE = "ventas-ruta-v15";
+const CACHE = "ventas-ruta-v16";
 const ARCHIVOS = [
   "./",
   "./index.html",
@@ -29,28 +29,38 @@ self.addEventListener("activate", ev => {
   );
 });
 
+/* Primero la red, con la copia guardada como respaldo.
+   Antes era al reves y funcionaba sin senal, pero cada mejora tardaba una
+   o dos aperturas en aparecer. Con este orden el cambio se ve de una, y si
+   no hay senal (o la red tarda mas de LIMITE) entra la copia guardada, asi
+   que sigue sirviendo en obra. */
+const LIMITE = 3500;
+
 self.addEventListener("fetch", ev => {
   const req = ev.request;
-  if (req.method !== "GET") return;                 // los envios a la hoja van directo a la red
+  if (req.method !== "GET") return;                   // los envios a la hoja van directo a la red
   const url = new URL(req.url);
-  if (url.origin !== location.origin) return;       // nada externo se cachea
+  if (url.origin !== location.origin) return;         // nada externo se cachea
   if (url.pathname.endsWith("catalogo.json")) return; // la lista va siempre a la red
 
-  ev.respondWith(
-    caches.match(req).then(hit => {
-      if (hit) {
-        // refresca en segundo plano, sin bloquear
-        fetch(req).then(r => {
-          if (r && r.ok) caches.open(CACHE).then(c => c.put(req, r.clone()));
-        }).catch(() => {});
-        return hit;
+  ev.respondWith((async () => {
+    try {
+      const red = await Promise.race([
+        fetch(url.pathname + url.search, { cache: "no-store" }),
+        new Promise((_, rechazar) => setTimeout(() => rechazar(new Error("lenta")), LIMITE))
+      ]);
+      if (red && red.ok) {
+        const c = await caches.open(CACHE);
+        c.put(req, red.clone());
+        return red;
       }
-      return fetch(req)
-        .then(r => {
-          if (r && r.ok) caches.open(CACHE).then(c => c.put(req, r.clone()));
-          return r;
-        })
-        .catch(() => caches.match("./index.html"));
-    })
-  );
+      throw new Error("respuesta " + (red && red.status));
+    } catch (e) {
+      const guardada = await caches.match(req);
+      if (guardada) return guardada;
+      const raiz = await caches.match("./index.html");
+      if (raiz) return raiz;
+      throw e;
+    }
+  })());
 });
