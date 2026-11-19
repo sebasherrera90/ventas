@@ -63,6 +63,12 @@
   .cat{flex:0 0 auto;padding:8px 14px;border-radius:999px;background:#fff;
     border:1.5px solid var(--linea);font-size:14px;font-weight:600;color:var(--gris)}
   .cat.sel{background:var(--azul);border-color:var(--azul);color:#fff}
+  .cat .n{opacity:.6;font-weight:600;margin-left:5px;font-size:12.5px}
+  .subcats{display:none;margin-top:-2px}
+  .subcats.ver{display:flex}
+  .subcats .cat{padding:6px 12px;font-size:13px;background:var(--azul-cl);
+    border-color:var(--azul-cl);color:#0a3f58}
+  .subcats .cat.sel{background:var(--azul);border-color:var(--azul);color:#fff}
 
   /* ====== Tarjeta de material ====== */
   .mat{background:#fff;border:1px solid var(--linea);border-radius:var(--r);
@@ -255,6 +261,7 @@
     <button class="limpiar" id="busLimpiar" aria-label="Limpiar">&times;</button>
   </div>
   <div class="cats" id="cats"></div>
+  <div class="cats subcats" id="subcats"></div>
   <div id="listaMat"></div>
 </section>
 
@@ -501,6 +508,59 @@ const CFG_DEF = {
   puesto:"EN OBRA, SOBRE PLATAFORMA DE CAMION"
 };
 
+/* =========================================================================
+   AGRUPACION DE CATEGORIAS
+   Dos niveles: grupo (primera fila de botones) y subgrupo (segunda fila).
+   Este mapa es el de arranque; si el CSV trae columnas "grupo" y "subgrupo",
+   esas mandan y se puede cambiar el agrupamiento desde el Excel.
+   ========================================================================= */
+const MAPA_GRUPOS = {
+  "hidrantes":                              ["Hidrantes", "Generales"],
+  "hidrantes - aplicaciones especiales":    ["Hidrantes", "Aplicaciones especiales"],
+  "tees":                                   ["Tees", "Generales"],
+  "tees hibridas para ventosa":             ["Tees", "Híbridas para ventosa"],
+
+  "valvulas pvc compacta":                  ["PVC", "Válvulas"],
+  "valvulas doble universal pvc":           ["PVC", "Válvulas"],
+  "valvulas ventosas plasticas":            ["PVC", "Válvulas"],
+  "cheque de resorte pvc":                  ["PVC", "Válvulas"],
+  "cheques antirretorno pvc":               ["PVC", "Válvulas"],
+  "valvula mariposa pvc":                   ["PVC", "Válvulas"],
+  "valvula de pie pvc":                     ["PVC", "Válvulas"],
+  "valvulas monoradial pvc":                ["PVC", "Válvulas"],
+  "accesorios varios pvc":                  ["PVC", "Uniones y accesorios"],
+  "universal pvc":                          ["PVC", "Uniones y accesorios"],
+  "brida giratoria pvc":                    ["PVC", "Uniones y accesorios"],
+  "accesorios pvc presion sch 40":          ["PVC", "Uniones y accesorios"],
+  "union dresser pvc":                      ["PVC", "Uniones y accesorios"],
+  "collar derivacion pvc":                  ["PVC", "Uniones y accesorios"],
+  "tuberia y accesorios cpvc":              ["PVC", "CPVC"],
+
+  "medidores de agua y certificados":       ["Registros y medidores", "Medidores"],
+  "registros para medidores - antifraude (0%)":   ["Registros y medidores", "Antifraude"],
+  "registros para medidores - m&v aqua (15%)":    ["Registros y medidores", "M&V AQUA"],
+
+  "termofusion a tope pn16 (pe 100)":       ["Termofusión", "A tope PN16"],
+  "termofusion a socket pn16":              ["Termofusión", "A socket PN16"],
+
+  "accesorios rapidos polietileno (pp)":    ["Polietileno", "Accesorios rápidos (PP)"],
+  "accesorios pead":                        ["Polietileno", "Accesorios PEAD"],
+  "llaves plasticas para accesorios rapidos": ["Polietileno", "Llaves plásticas"],
+
+  "valvulas, hidrantes y bridas":           ["Válvulas, hidrantes y bridas", ""]
+};
+const sinTildes = s => String(s||"").toLowerCase().trim()
+  .normalize("NFD").replace(/[̀-ͯ]/g,"");
+
+function conGrupo(m){
+  if(m.grupo) return m;                                   // ya viene del archivo
+  const par = MAPA_GRUPOS[sinTildes(m.categoria)];
+  m.grupo = par ? par[0] : (m.categoria || "Sin categoría");
+  m.sub   = par ? par[1] : "";
+  return m;
+}
+const agrupar = lista => (lista || []).map(conGrupo);
+
 /* ---------- Almacenamiento resistente ---------- */
 let MEM = {}, STORE_OK = true;
 const S = {
@@ -520,10 +580,10 @@ const S = {
 
 /* ---------- Estado ---------- */
 let cfg      = Object.assign({}, CFG_DEF, S.get("cfg",{}));
-let catalogo = S.get("catalogo", null) || CAT_DEMO.slice();
+let catalogo = agrupar(S.get("catalogo", null) || CAT_DEMO.slice());
 let carrito  = S.get("carrito", []);
 let ventas   = S.get("ventas", []);
-let catSel   = "Todas";
+let grupoSel = "Todas", subSel = "Todas";
 let sincronizando = false;
 
 /* ---------- Utilidades ---------- */
@@ -619,23 +679,52 @@ $("#hojaCerrar").addEventListener("click", cerrarHoja);
 /* =========================================================================
    VENDER — catálogo
    ========================================================================= */
-function categorias(){
-  const set = [];
-  catalogo.forEach(m => { const c=(m.categoria||"Sin categoría"); if(!set.includes(c)) set.push(c); });
-  return ["Todas"].concat(set);
+function contarPor(campo, dentroDeGrupo){
+  const c = {};
+  catalogo.forEach(m => {
+    if(dentroDeGrupo && m.grupo !== dentroDeGrupo) return;
+    const k = m[campo] || "";
+    if(k) c[k] = (c[k] || 0) + 1;
+  });
+  return c;
+}
+const porCantidad = c => Object.keys(c).sort((a,b)=> c[b]-c[a] || a.localeCompare(b,"es"));
+
+function chip(texto, n, seleccionado, attr){
+  return '<button class="cat'+(seleccionado?" sel":"")+'" '+attr+'="'+esc(texto)+'">'+
+         esc(texto)+'<span class="n">'+n+'</span></button>';
 }
 function pintarCats(){
-  $("#cats").innerHTML = categorias().map(c =>
-    '<button class="cat'+(c===catSel?" sel":"")+'" data-cat="'+esc(c)+'">'+esc(c)+'</button>').join("");
+  const c = contarPor("grupo");
+  const grupos = porCantidad(c);
+  $("#cats").innerHTML = chip("Todas", catalogo.length, grupoSel==="Todas", "data-g") +
+    grupos.map(g => chip(g, c[g], g===grupoSel, "data-g")).join("");
   $$("#cats .cat").forEach(b => b.addEventListener("click", ()=>{
-    catSel = b.dataset.cat; pintarCats(); pintarMat();
+    grupoSel = b.dataset.g; subSel = "Todas";
+    pintarCats(); pintarSubcats(); pintarMat(); window.scrollTo(0,0);
+  }));
+}
+function pintarSubcats(){
+  const caja = $("#subcats");
+  const c = grupoSel === "Todas" ? {} : contarPor("sub", grupoSel);
+  const subs = porCantidad(c);
+  if(subs.length < 2){                      // un solo subgrupo no merece una fila
+    caja.className = "cats subcats"; caja.innerHTML = ""; return;
+  }
+  const total = subs.reduce((t,k)=>t+c[k], 0);
+  caja.innerHTML = chip("Todas", total, subSel==="Todas", "data-s") +
+    subs.map(s => chip(s, c[s], s===subSel, "data-s")).join("");
+  caja.className = "cats subcats ver";
+  $$("#subcats .cat").forEach(b => b.addEventListener("click", ()=>{
+    subSel = b.dataset.s; pintarSubcats(); pintarMat();
   }));
 }
 function pintarMat(){
   const q = $("#bus").value.trim().toLowerCase();
   $("#boxBus").classList.toggle("lleno", q.length>0);
   let lista = catalogo.filter(m =>
-    (catSel==="Todas" || (m.categoria||"Sin categoría")===catSel) &&
+    (grupoSel==="Todas" || m.grupo===grupoSel) &&
+    (subSel==="Todas" || (m.sub||"")===subSel) &&
     (!q || (m.nombre+" "+m.codigo+" "+(m.categoria||"")).toLowerCase().includes(q)));
 
   if(!lista.length){
@@ -661,7 +750,12 @@ function pintarMat(){
   $$("#listaMat .btn-add").forEach(b =>
     b.addEventListener("click", ()=>hojaAgregar(b.dataset.cod)));
 }
-$("#bus").addEventListener("input", pintarMat);
+$("#bus").addEventListener("input", ()=>{
+  if($("#bus").value.trim() && grupoSel !== "Todas"){
+    grupoSel = "Todas"; subSel = "Todas"; pintarCats(); pintarSubcats();
+  }
+  pintarMat();
+});
 $("#busLimpiar").addEventListener("click", ()=>{ $("#bus").value=""; pintarMat(); });
 
 /* ---------- Hoja: agregar material ---------- */
@@ -1329,7 +1423,9 @@ function interpretarCSV(crudo){
     costo:  buscar("costo","costo_unitario","precio_lista","precio_empresa","valor_lista"),
     venta:  buscar("precio_venta","venta","precio_publico","pvp","precio"),
     minimo: buscar("precio_minimo","minimo","piso","precio_min"),
-    activo: buscar("activo","estado","disponible","vigente")
+    activo: buscar("activo","estado","disponible","vigente"),
+    grupo:  buscar("grupo","familia_grupo","agrupacion"),
+    sub:    buscar("subgrupo","sub_grupo","subcategoria")
   };
   if(col.nombre<0 || col.costo<0 || col.venta<0)
     throw new Error("Faltan columnas obligatorias: se necesitan al menos nombre, costo y precio_venta.");
@@ -1352,7 +1448,9 @@ function interpretarCSV(crudo){
       unidad: (col.unidad>-1 && String(fila[col.unidad]||"").trim()) || "und",
       categoria: (col.categ>-1 && String(fila[col.categ]||"").trim()) || "Sin categoría",
       costo: costo, precio_venta: venta,
-      precio_minimo: min>0 ? min : Math.max(costo, Math.round(venta*(1-num(cfg.descMax)/100)))
+      precio_minimo: min>0 ? min : Math.max(costo, Math.round(venta*(1-num(cfg.descMax)/100))),
+      grupo: (col.grupo>-1 && String(fila[col.grupo]||"").trim()) || "",
+      sub:   (col.sub>-1   && String(fila[col.sub]||"").trim())   || ""
     });
   });
   if(!nuevo.length) throw new Error("No se encontró ningún material válido.");
@@ -1373,13 +1471,13 @@ function resumenLista(res){
 }
 
 function aplicarCatalogo(lista, etiqueta, version){
-  catalogo = lista;
+  catalogo = agrupar(lista);
   cfg.catalogoPropio = true;
   cfg.catalogoNombre = etiqueta;
   if(version !== undefined) cfg.catalogoVersion = version;
   S.set("catalogo", catalogo); S.set("cfg", cfg);
-  catSel = "Todas";
-  pintarCats(); pintarMat(); pintarAjustes(); encabezado();
+  grupoSel = "Todas"; subSel = "Todas";
+  pintarCats(); pintarSubcats(); pintarMat(); pintarAjustes(); encabezado();
 }
 
 $("#archCsv").addEventListener("change", ev => {
@@ -1548,9 +1646,9 @@ $("#btnRestCat").addEventListener("click", ()=>{
     '<button class="btn btn-gris" id="noRest">Cancelar</button>');
   $("#noRest").addEventListener("click", cerrarHoja);
   $("#siRest").addEventListener("click", ()=>{
-    catalogo = CAT_DEMO.slice(); cfg.catalogoPropio=false; cfg.catalogoNombre="";
-    S.set("catalogo",null); S.set("cfg",cfg); catSel="Todas";
-    cerrarHoja(); pintarCats(); pintarMat(); pintarAjustes();
+    catalogo = agrupar(CAT_DEMO.slice()); cfg.catalogoPropio=false; cfg.catalogoNombre="";
+    S.set("catalogo",null); S.set("cfg",cfg); grupoSel="Todas"; subSel="Todas";
+    cerrarHoja(); pintarCats(); pintarSubcats(); pintarMat(); pintarAjustes();
     aviso("Lista de ejemplo restaurada.","ok",3);
   });
 });
@@ -1587,7 +1685,7 @@ function iniciar(){
     S.set("catalogo", catalogo);
     aviso("Se corrigieron las tildes y los grados de la lista de precios.","ok",5);
   }
-  pintarCats(); pintarMat(); refrescarBadges(); encabezado();
+  pintarCats(); pintarSubcats(); pintarMat(); refrescarBadges(); encabezado();
   if(!cfg.vendedora && cfg.catalogoPropio){
     aviso("Entra a <b>Ajustes</b> y pon tu nombre, para que salga en las cotizaciones.","info",8);
   }
