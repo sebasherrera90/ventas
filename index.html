@@ -336,9 +336,18 @@
   <h2 class="sec">Quién vende</h2>
   <div class="item">
     <div class="campo"><label for="cfgNom">Nombre de la vendedora</label>
-      <input id="cfgNom" type="text" placeholder="Ej: Laura Gómez" autocomplete="off"></div>
-    <div class="campo" style="margin-top:10px"><label for="cfgEmp">Nombre de la empresa</label>
-      <input id="cfgEmp" type="text" placeholder="Ej: Hidroval S.A.S." autocomplete="off"></div>
+      <input id="cfgNom" type="text" placeholder="Escribe aquí tu nombre" autocomplete="off"></div>
+    <div class="ayuda">Es el único dato que necesitas configurar.</div>
+  </div>
+
+  <button class="btn btn-gris" id="btnAdmin">Opciones de administrador</button>
+
+<div id="zonaAdmin" style="display:none">
+
+  <h2 class="sec">Empresa</h2>
+  <div class="item">
+    <div class="campo"><label for="cfgEmp">Nombre de la empresa</label>
+      <input id="cfgEmp" type="text" autocomplete="off"></div>
   </div>
 
   <h2 class="sec">Reglas de negocio</h2>
@@ -364,7 +373,7 @@
       <div class="campo"><label for="cfgCiudad">Ciudad por defecto</label>
         <input id="cfgCiudad" type="text" placeholder="Medellín" autocomplete="off"></div>
       <div class="campo"><label for="cfgFirmante">Nombre que firma</label>
-        <input id="cfgFirmante" type="text" placeholder="Sebastián Zuluaga Pareja" autocomplete="off"></div>
+        <input id="cfgFirmante" type="text" autocomplete="off"></div>
     </div>
     <div class="campo" style="margin-top:10px"><label for="cfgCargo">Cargo en la firma</label>
       <input id="cfgCargo" type="text" placeholder="Representante técnico comercial" autocomplete="off"></div>
@@ -417,6 +426,16 @@
     <button class="btn btn-sec" id="btnProbar">Probar conexión</button>
     <div class="ayuda">Las ventas se guardan siempre en el celular. Cuando hay señal se envían solas; si no, quedan en cola y se envían al tocar <b>Enviar ventas</b>.</div>
   </div>
+
+  <h2 class="sec">Clave de administrador</h2>
+  <div class="item">
+    <div class="campo"><label for="cfgPin">Clave para abrir estas opciones</label>
+      <input id="cfgPin" type="text" autocomplete="off" placeholder="Sin clave, cualquiera entra aquí"></div>
+    <div class="ayuda">Protege esta zona de cambios por descuido. No es una caja fuerte:
+      alguien con conocimientos técnicos podría saltársela desde el navegador.</div>
+  </div>
+
+</div><!-- fin zonaAdmin -->
 
   <div class="divisor"></div>
   <button class="btn btn-pri" id="btnGuardarCfg">Guardar ajustes</button>
@@ -480,7 +499,7 @@
 <script src="pdf-cotizacion.js"></script>
 <script>
 "use strict";
-const VERSION = "17";   // sube con cada publicación, junto al CACHE de sw.js
+const VERSION = "18";   // sube con cada publicación, junto al CACHE de sw.js
 /* =========================================================================
    Ventas en Ruta — app de venta en frío, 100% offline.
    Los datos viven en el celular (localStorage). Las ventas se encolan y
@@ -504,11 +523,12 @@ const CAT_DEMO = [
 ];
 
 const CFG_DEF = {
-  vendedora:"", empresa:"", comision:10, descMax:15,
+  vendedora:"", empresa:"Hidroval S.A.S.", comision:10, descMax:15,
   url:"", token:"", wa:"", catalogoPropio:false, catalogoNombre:"",
   clave:"", catalogoVersion:"",
   consecutivo:5576, iva:19, ciudad:"Medellín",
-  firmante:"", cargo:"Representante técnico comercial",
+  firmante:"Sebastián Zuluaga Pareja", cargo:"Representante técnico comercial",
+  pinAdmin:"",
   pago:"ANTICIPO DEL (50 %) Y OTRO (50 %) RESTANTE SE PAGARA CONTRA ENTREGA DEL MATERIAL EN OBRA.",
   entrega:"A CONVENIR", validez:"25 DIAS", descuento:"INCLUIDO",
   puesto:"EN OBRA, SOBRE PLATAFORMA DE CAMION"
@@ -696,6 +716,7 @@ function ir(v){
   if(v==="cot")    pintarCot();
   if(v==="ventas") pintarVentas();
   if(v==="ajustes")pintarAjustes();
+  else if(typeof cerrarAdmin === "function") cerrarAdmin();   // se cierra al salir
 }
 $$("nav button").forEach(b => b.addEventListener("click", ()=>ir(b.dataset.ir)));
 
@@ -1368,6 +1389,7 @@ function pintarAjustes(){
   $("#cfgCons").value = num(cfg.consecutivo); $("#cfgIva").value = num(cfg.iva);
   $("#cfgCiudad").value = cfg.ciudad||"";  $("#cfgCargo").value = cfg.cargo||"";
   $("#cfgFirmante").value = cfg.firmante||"";
+  $("#cfgPin").value = cfg.pinAdmin||"";
   $("#cfgPago").value = cfg.pago||"";      $("#cfgEntrega").value = cfg.entrega||"";
   $("#cfgValidez").value = cfg.validez||""; $("#cfgDescuento").value = cfg.descuento||"";
   $("#cfgPuesto").value = cfg.puesto||"";
@@ -1391,6 +1413,7 @@ $("#btnGuardarCfg").addEventListener("click", ()=>{
   cfg.iva       = Math.min(50, Math.max(0, num($("#cfgIva").value)));
   cfg.ciudad    = $("#cfgCiudad").value.trim();
   cfg.firmante  = $("#cfgFirmante").value.trim();
+  cfg.pinAdmin  = $("#cfgPin").value.trim();
   cfg.cargo     = $("#cfgCargo").value.trim();
   cfg.pago      = $("#cfgPago").value.trim();
   cfg.entrega   = $("#cfgEntrega").value.trim();
@@ -1733,6 +1756,9 @@ function encabezado(){
 }
 function iniciar(){
   estadoConexion(); avisosFijos();
+  // quien ya tenia la app guardo estos campos vacios: se rellenan una vez
+  if(!cfg.empresa)  { cfg.empresa  = CFG_DEF.empresa;  S.set("cfg", cfg); }
+  if(!cfg.firmante) { cfg.firmante = CFG_DEF.firmante; S.set("cfg", cfg); }
   // Repara listas cargadas antes del arreglo de codificacion, sin volver a cargar el CSV
   if(cfg.catalogoPropio && catalogo.some(m =>
        /[ÃÂâ][\u0080-¿]/.test(String(m.nombre||"")+String(m.categoria||"")))){
@@ -1757,6 +1783,53 @@ function iniciar(){
   if(!cfg.catalogoPropio && navigator.onLine && window.crypto && crypto.subtle) bloqueoEsperando();
   setTimeout(()=>bajarCatalogo(false), 120);
 }
+/* =========================================================================
+   ZONA DE ADMINISTRADOR
+   Precios, condiciones de la cotización y envío de ventas quedan fuera del
+   alcance de la vendedora. Es un cerrojo contra cambios por descuido, no
+   una caja fuerte: quien sepa de navegadores puede saltárselo.
+   ========================================================================= */
+let adminAbierto = false;
+function cerrarAdmin(){
+  adminAbierto = false;
+  const z = $("#zonaAdmin"), b = $("#btnAdmin");
+  if(z) z.style.display = "none";
+  if(b) b.style.display = "";
+}
+function abrirAdmin(){
+  adminAbierto = true;
+  $("#zonaAdmin").style.display = "";
+  $("#btnAdmin").style.display = "none";
+  pintarAjustes();
+}
+$("#btnAdmin").addEventListener("click", ()=>{
+  if(!cfg.pinAdmin){                       // todavía nadie la ha puesto
+    abrirAdmin();
+    aviso("Ponle una <b>clave de administrador</b> al final de esta pantalla "+
+          "antes de entregarle el celular a la vendedora.","warn",9);
+    return;
+  }
+  abrirHoja('<div class="hoja-tit">Opciones de administrador</div>'+
+    '<div class="hoja-sub">Esta zona cambia precios, cotizaciones y envío de ventas.</div>'+
+    '<div class="campo" style="margin-top:16px"><label for="adPin">Clave</label>'+
+      '<input id="adPin" type="password" autocomplete="current-password" '+
+      'style="font-size:18px;padding:14px"></div>'+
+    '<div id="adMsg"></div>'+
+    '<button class="btn btn-pri" id="adOk">Entrar</button>'+
+    '<button class="btn btn-gris" id="adNo">Cancelar</button>');
+  const probar = ()=>{
+    if($("#adPin").value === cfg.pinAdmin){ cerrarHoja(); abrirAdmin(); }
+    else {
+      $("#adMsg").innerHTML = '<div class="alerta-min" style="margin-top:10px">Clave incorrecta.</div>';
+      $("#adPin").select();
+    }
+  };
+  $("#adNo").addEventListener("click", cerrarHoja);
+  $("#adOk").addEventListener("click", probar);
+  $("#adPin").addEventListener("keydown", e => { if(e.key === "Enter") probar(); });
+  setTimeout(()=>{ try{ $("#adPin").focus(); }catch(e){} }, 250);
+});
+
 /* Borra la copia guardada de la app y recarga. No toca localStorage, asi
    que la lista de precios, la clave y las ventas pendientes se conservan. */
 $("#btnActualizarApp").addEventListener("click", async ()=>{
