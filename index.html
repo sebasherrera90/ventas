@@ -193,9 +193,26 @@
     font-weight:700;padding:4px 9px;border-radius:999px;margin:0 6px 6px 0}
 
   /* ====== Pantalla de clave (cubre todo en el primer ingreso) ====== */
-  .bloqueo{position:fixed;inset:0;z-index:70;background:var(--azul);display:none;
-    align-items:center;justify-content:center;padding:22px;overflow-y:auto}
+  .bloqueo{position:fixed;inset:0;z-index:70;display:none;
+    align-items:center;justify-content:center;padding:22px;overflow-y:auto;
+    background:linear-gradient(168deg,#1B3C69 0%,#15325A 42%,#0C1D36 100%)}
   .bloqueo.ver{display:flex}
+  .bq-olas{position:absolute;left:0;right:0;bottom:0;width:100%;height:210px;
+    pointer-events:none;z-index:0}
+  .bq-pie{position:absolute;bottom:14px;left:0;right:0;text-align:center;z-index:1;
+    color:rgba(255,255,255,.5);font-size:11.5px;letter-spacing:1.4px;text-transform:uppercase;
+    font-weight:700}
+  .bq-membrete{background:#F7F7F7;line-height:0;border-bottom:1px solid #e4e9ee}
+  .bq-membrete img{width:100%;display:block}
+  .bq-marcatxt{display:none;padding:22px 22px 18px;text-align:center;
+    font-size:24px;font-weight:800;letter-spacing:2px;color:#1B3C69}
+  .bq-cuerpo{padding:24px 22px calc(22px + var(--safe-b))}
+  .bq-caja .btn-pri{background:#1B3C69}
+  .bq-caja .btn-pri:active{background:#12294A}
+  .bq-barra{height:4px;border-radius:3px;background:#e4e9ee;overflow:hidden;margin-top:14px}
+  .bq-barra i{display:block;height:100%;width:40%;background:#3681BA;border-radius:3px;
+    animation:bqva 1.1s ease-in-out infinite}
+  @keyframes bqva{0%{transform:translateX(-100%)}100%{transform:translateX(260%)}}
   body.bloqueado{overflow:hidden}
   /* no basta con taparlo: hay que sacarlo de la página, o con Tab o con
      lector de pantalla se llega al catálogo que está detrás */
@@ -205,11 +222,9 @@
   body.bloqueado > #avisos,
   body.bloqueado > .hoja,
   body.bloqueado > .fondo-modal{display:none !important}
-  .bq-caja{background:#fff;border-radius:18px;width:100%;max-width:420px;
-    padding:26px 22px calc(24px + var(--safe-b));box-shadow:0 12px 44px rgba(0,0,0,.28)}
-  .bq-marca{font-size:11.5px;text-transform:uppercase;letter-spacing:1.3px;
-    color:var(--azul);font-weight:800}
-  .bq-tit{font-size:21px;font-weight:800;margin:10px 0 6px;line-height:1.25}
+  .bq-caja{position:relative;z-index:1;background:#fff;border-radius:20px;overflow:hidden;
+    width:100%;max-width:430px;box-shadow:0 18px 50px rgba(0,0,0,.38)}
+  .bq-tit{font-size:21px;font-weight:800;margin:0 0 6px;line-height:1.25;color:#12294A}
   .bq-sub{font-size:14.5px;color:var(--gris);margin:0 0 20px;line-height:1.45}
   .bq-caja label{display:block;font-size:11.5px;text-transform:uppercase;letter-spacing:.5px;
     color:var(--gris);font-weight:700;margin-bottom:5px}
@@ -401,22 +416,37 @@
 
 <!-- ============ PANTALLA DE CLAVE (primer ingreso) ============ -->
 <div class="bloqueo" id="bloqueo">
+  <svg class="bq-olas" viewBox="0 0 1440 320" preserveAspectRatio="none" aria-hidden="true">
+    <path fill="#ffffff" fill-opacity="0.07"
+      d="M0,224L60,213C120,203,240,181,360,181C480,181,600,203,720,213C840,224,960,224,1080,208C1200,192,1320,160,1380,144L1440,128L1440,320L0,320Z"/>
+    <path fill="#3681BA" fill-opacity="0.22"
+      d="M0,256L80,251C160,245,320,235,480,240C640,245,800,267,960,267C1120,267,1280,245,1360,235L1440,224L1440,320L0,320Z"/>
+    <path fill="#3681BA" fill-opacity="0.16"
+      d="M0,288L120,282C240,277,480,267,720,272C960,277,1200,299,1320,309L1440,320L1440,320L0,320Z"/>
+  </svg>
+
   <div class="bq-caja">
-    <div class="bq-marca" id="bqMarca">Ventas en Ruta</div>
-    <div id="bqEspera">
-      <div class="bq-tit">Preparando la lista de precios</div>
-      <div class="bq-cargando">Un momento…</div>
-    </div>
-    <div id="bqForm" style="display:none">
-      <div class="bq-tit">Clave de la lista de precios</div>
-      <p class="bq-sub">Se escribe una sola vez y queda guardada en este celular. Te la da tu jefe.</p>
-      <label for="bqClave">Clave</label>
-      <input id="bqClave" type="password" autocomplete="current-password" spellcheck="false">
-      <div id="bqMsg"></div>
-      <button class="btn btn-pri" id="bqOk">Abrir la lista</button>
-      <button class="bq-otro" id="bqOtro">No tengo la clave</button>
+    <div class="bq-membrete" id="bqMembrete"><img id="bqLogo" alt=""></div>
+    <div class="bq-marcatxt" id="bqMarca">HIDROVAL</div>
+    <div class="bq-cuerpo">
+      <div id="bqEspera">
+        <div class="bq-tit">Preparando la lista de precios</div>
+        <div class="bq-cargando">Buscando la versión más reciente…</div>
+        <div class="bq-barra"><i></i></div>
+      </div>
+      <div id="bqForm" style="display:none">
+        <div class="bq-tit">Clave de la lista de precios</div>
+        <p class="bq-sub">Se escribe una sola vez y queda guardada en este celular. Te la da tu jefe.</p>
+        <label for="bqClave">Clave</label>
+        <input id="bqClave" type="password" autocomplete="current-password" spellcheck="false">
+        <div id="bqMsg"></div>
+        <button class="btn btn-pri" id="bqOk">Abrir la lista</button>
+        <button class="bq-otro" id="bqOtro">No tengo la clave</button>
+      </div>
     </div>
   </div>
+
+  <div class="bq-pie">Ventas en Ruta</div>
 </div>
 
 <!-- ===================== NAV ===================== -->
@@ -1442,6 +1472,20 @@ function pedirClave(paq){
 /* Pantalla completa: solo en el primer ingreso, cuando todavia no hay
    ninguna lista propia. Si ya tiene una, una version nueva no puede
    dejarla sin trabajar, asi que ahi se usa la hoja de siempre. */
+function marcaBloqueo(){
+  const img = $("#bqLogo"), M = window.MEMBRETE;
+  const sinMembrete = ()=>{
+    $("#bqMembrete").style.display = "none";
+    const m = $("#bqMarca");
+    m.style.display = "block";
+    m.textContent = (cfg.empresa || "Ventas en Ruta").toUpperCase();
+  };
+  if(M && M.encabezado && M.encabezado.jpg){
+    img.onerror = sinMembrete;
+    img.alt = cfg.empresa || "Hidroval";
+    img.src = "data:image/jpeg;base64," + M.encabezado.jpg;
+  } else sinMembrete();
+}
 function bloqueoVisible(ver){
   $("#bloqueo").classList.toggle("ver", !!ver);
   document.body.classList.toggle("bloqueado", !!ver);
@@ -1455,7 +1499,6 @@ function bloqueoClave(paq){
   bloqueoVisible(true);
   $("#bqEspera").style.display = "none";
   $("#bqForm").style.display = "";
-  $("#bqMarca").textContent = cfg.empresa || "Ventas en Ruta";
   const inp = $("#bqClave");
   inp.value = ""; $("#bqMsg").innerHTML = ""; $("#bqOk").disabled = false;
   const intentar = async ()=>{
@@ -1553,6 +1596,7 @@ function iniciar(){
   }
   if(pendientes().length) setTimeout(()=>sincronizar(true), 1500);
   // Antes de que alcance a verse el catálogo de ejemplo
+  marcaBloqueo();
   if(!cfg.catalogoPropio && navigator.onLine && window.crypto && crypto.subtle) bloqueoEsperando();
   setTimeout(()=>bajarCatalogo(false), 120);
 }
