@@ -720,12 +720,20 @@ function pintarSubcats(){
   }));
 }
 function pintarMat(){
-  const q = $("#bus").value.trim().toLowerCase();
+  const q = $("#bus").value.trim();
   $("#boxBus").classList.toggle("lleno", q.length>0);
+  // Cada palabra por separado y sin tildes: "codo 110" encuentra
+  // "Codo 90° PE 100 RDE 11 110 mm", aunque no estén pegadas.
+  const palabras = sinTildes(q).split(/\s+/).filter(Boolean);
+  const coincide = m => {
+    if(!palabras.length) return true;
+    const t = sinTildes(m.nombre+" "+m.codigo+" "+(m.categoria||"")+" "+(m.grupo||""));
+    return palabras.every(p => t.indexOf(p) > -1);
+  };
   let lista = catalogo.filter(m =>
     (grupoSel==="Todas" || m.grupo===grupoSel) &&
     (subSel==="Todas" || (m.sub||"")===subSel) &&
-    (!q || (m.nombre+" "+m.codigo+" "+(m.categoria||"")).toLowerCase().includes(q)));
+    coincide(m));
 
   if(!lista.length){
     $("#listaMat").innerHTML = '<div class="vacio"><div class="ico">🔍</div>'+
