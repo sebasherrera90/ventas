@@ -480,7 +480,7 @@
 <script src="pdf-cotizacion.js"></script>
 <script>
 "use strict";
-const VERSION = "16";   // sube con cada publicación, junto al CACHE de sw.js
+const VERSION = "17";   // sube con cada publicación, junto al CACHE de sw.js
 /* =========================================================================
    Ventas en Ruta — app de venta en frío, 100% offline.
    Los datos viven en el celular (localStorage). Las ventas se encolan y
@@ -573,8 +573,17 @@ const REGLAS_NOMBRE = {
   ]
 };
 
+/* El grupo se recalcula SIEMPRE al abrir. Antes se respetaba el que ya
+   tuviera el material, y como la lista se guarda en el celular con los
+   grupos dentro, quedaban congelados los de versiones viejas. Lo único
+   que manda por encima del mapa es lo que venga en el archivo de precios,
+   que se guarda aparte justamente para no confundirse con lo calculado. */
 function conGrupo(m){
-  if(m.grupo) return m;                                   // ya viene del archivo
+  if(m.grupoArchivo){
+    m.grupo = m.grupoArchivo;
+    m.sub   = m.subArchivo || "";
+    return m;
+  }
   const cat = sinTildes(m.categoria);
   const reglas = REGLAS_NOMBRE[cat];
   if(reglas){
@@ -1499,8 +1508,8 @@ function interpretarCSV(crudo){
       categoria: (col.categ>-1 && String(fila[col.categ]||"").trim()) || "Sin categoría",
       costo: costo, precio_venta: venta,
       precio_minimo: min>0 ? min : Math.max(costo, Math.round(venta*(1-num(cfg.descMax)/100))),
-      grupo: (col.grupo>-1 && String(fila[col.grupo]||"").trim()) || "",
-      sub:   (col.sub>-1   && String(fila[col.sub]||"").trim())   || ""
+      grupoArchivo: (col.grupo>-1 && String(fila[col.grupo]||"").trim()) || "",
+      subArchivo:   (col.sub>-1   && String(fila[col.sub]||"").trim())   || ""
     });
   });
   if(!nuevo.length) throw new Error("No se encontró ningún material válido.");
