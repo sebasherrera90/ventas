@@ -480,7 +480,7 @@
 <script src="pdf-cotizacion.js"></script>
 <script>
 "use strict";
-const VERSION = "14";   // sube con cada publicación, junto al CACHE de sw.js
+const VERSION = "15";   // sube con cada publicación, junto al CACHE de sw.js
 /* =========================================================================
    Ventas en Ruta — app de venta en frío, 100% offline.
    Los datos viven en el celular (localStorage). Las ventas se encolan y
@@ -1364,7 +1364,7 @@ function pintarAjustes(){
   $("#cfgPuesto").value = cfg.puesto||"";
   $("#infoCat").innerHTML =
     '<span class="pill-info">'+catalogo.length+' materiales</span>'+
-    '<span class="pill-info">'+(categorias().length-1)+' categorías</span>'+
+    '<span class="pill-info">'+Object.keys(contarPor("grupo")).length+' grupos</span>'+
     '<span class="pill-info">'+(cfg.catalogoPropio
       ? esc(cfg.catalogoNombre||"lista cargada") : "lista de ejemplo")+'</span>';
   $("#pieInfo").innerHTML = "Ventas en Ruta · versión "+VERSION+"<br>"+
