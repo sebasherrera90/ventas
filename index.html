@@ -191,6 +191,26 @@
   input[type=file]{font-size:14px;padding:9px}
   .pill-info{display:inline-block;background:#eef3f6;color:var(--gris);font-size:12px;
     font-weight:700;padding:4px 9px;border-radius:999px;margin:0 6px 6px 0}
+
+  /* ====== Pantalla de clave (cubre todo en el primer ingreso) ====== */
+  .bloqueo{position:fixed;inset:0;z-index:70;background:var(--azul);display:none;
+    align-items:center;justify-content:center;padding:22px;overflow-y:auto}
+  .bloqueo.ver{display:flex}
+  body.bloqueado{overflow:hidden}
+  .bq-caja{background:#fff;border-radius:18px;width:100%;max-width:420px;
+    padding:26px 22px calc(24px + var(--safe-b));box-shadow:0 12px 44px rgba(0,0,0,.28)}
+  .bq-marca{font-size:11.5px;text-transform:uppercase;letter-spacing:1.3px;
+    color:var(--azul);font-weight:800}
+  .bq-tit{font-size:21px;font-weight:800;margin:10px 0 6px;line-height:1.25}
+  .bq-sub{font-size:14.5px;color:var(--gris);margin:0 0 20px;line-height:1.45}
+  .bq-caja label{display:block;font-size:11.5px;text-transform:uppercase;letter-spacing:.5px;
+    color:var(--gris);font-weight:700;margin-bottom:5px}
+  .bq-caja input{width:100%;padding:14px;border:1.5px solid var(--linea);
+    border-radius:10px;font-size:18px}
+  .bq-caja input:focus{outline:none;border-color:var(--azul)}
+  .bq-otro{display:block;width:100%;margin-top:12px;padding:10px;font-size:13.5px;
+    color:var(--gris);text-decoration:underline}
+  .bq-cargando{font-size:15px;color:var(--gris);padding:6px 0 2px}
 </style>
 </head>
 <body>
@@ -370,6 +390,26 @@
   <button class="btn btn-pri" id="btnGuardarCfg">Guardar ajustes</button>
   <div class="ayuda" style="text-align:center;margin-top:14px" id="pieInfo"></div>
 </section>
+
+<!-- ============ PANTALLA DE CLAVE (primer ingreso) ============ -->
+<div class="bloqueo" id="bloqueo">
+  <div class="bq-caja">
+    <div class="bq-marca" id="bqMarca">Ventas en Ruta</div>
+    <div id="bqEspera">
+      <div class="bq-tit">Preparando la lista de precios</div>
+      <div class="bq-cargando">Un momento…</div>
+    </div>
+    <div id="bqForm" style="display:none">
+      <div class="bq-tit">Clave de la lista de precios</div>
+      <p class="bq-sub">Se escribe una sola vez y queda guardada en este celular. Te la da tu jefe.</p>
+      <label for="bqClave">Clave</label>
+      <input id="bqClave" type="password" autocomplete="current-password" spellcheck="false">
+      <div id="bqMsg"></div>
+      <button class="btn btn-pri" id="bqOk">Abrir la lista</button>
+      <button class="bq-otro" id="bqOtro">No tengo la clave</button>
+    </div>
+  </div>
+</div>
 
 <!-- ===================== NAV ===================== -->
 <nav>
@@ -1391,19 +1431,64 @@ function pedirClave(paq){
   setTimeout(()=>{ const i = $("#cvClave"); if(i) i.focus(); }, 250);
 }
 
+/* Pantalla completa: solo en el primer ingreso, cuando todavia no hay
+   ninguna lista propia. Si ya tiene una, una version nueva no puede
+   dejarla sin trabajar, asi que ahi se usa la hoja de siempre. */
+function bloqueoVisible(ver){
+  $("#bloqueo").classList.toggle("ver", !!ver);
+  document.body.classList.toggle("bloqueado", !!ver);
+}
+function bloqueoEsperando(){
+  bloqueoVisible(true);
+  $("#bqEspera").style.display = "";
+  $("#bqForm").style.display = "none";
+}
+function bloqueoClave(paq){
+  bloqueoVisible(true);
+  $("#bqEspera").style.display = "none";
+  $("#bqForm").style.display = "";
+  $("#bqMarca").textContent = cfg.empresa || "Ventas en Ruta";
+  const inp = $("#bqClave");
+  inp.value = ""; $("#bqMsg").innerHTML = ""; $("#bqOk").disabled = false;
+  const intentar = async ()=>{
+    const c = inp.value;
+    if(!c) return;
+    $("#bqOk").disabled = true;
+    $("#bqMsg").innerHTML = '<div class="bq-cargando">Abriendo la lista…</div>';
+    if(await usarPaquete(paq, c)){ bloqueoVisible(false); }
+    else{
+      $("#bqMsg").innerHTML = '<div class="alerta-min" style="margin-top:10px">'+
+        'Esa clave no abre la lista. Revisa mayúsculas y guiones.</div>';
+      $("#bqOk").disabled = false; inp.focus(); inp.select();
+    }
+  };
+  $("#bqOk").onclick = intentar;
+  inp.onkeydown = e => { if(e.key === "Enter") intentar(); };
+  $("#bqOtro").onclick = ()=>{
+    $("#bqMsg").innerHTML = '<div class="aviso info" style="margin:12px 0 0">'+
+      'La lista de precios va protegida. Pídele la clave a tu jefe: se escribe una sola vez '+
+      'y no te la vuelve a pedir en este celular.</div>';
+  };
+  setTimeout(()=>{ try{ inp.focus(); }catch(e){} }, 300);
+}
+
 async function bajarCatalogo(forzar){
-  if(!navigator.onLine || !(window.crypto && crypto.subtle)) return;
+  const primeraVez = !cfg.catalogoPropio;
+  if(!navigator.onLine || !(window.crypto && crypto.subtle)){ bloqueoVisible(false); return; }
   let paq = null;
   try{
     const r = await fetch("catalogo.json?v="+Date.now(), {cache:"no-store"});
-    if(!r.ok) return;                       // todavia no hay lista publicada
+    if(!r.ok){ bloqueoVisible(false); return; }   // todavia no hay lista publicada
     paq = await r.json();
-  }catch(e){ return; }
-  if(!paq || !paq.datos || !paq.salt || !paq.iv) return;
-  if(!forzar && cfg.catalogoPropio && cfg.catalogoVersion === paq.version) return;
-  if(cfg.clave && await usarPaquete(paq, cfg.clave)) return;
+  }catch(e){ bloqueoVisible(false); return; }
+  if(!paq || !paq.datos || !paq.salt || !paq.iv){ bloqueoVisible(false); return; }
+  if(!forzar && cfg.catalogoPropio && cfg.catalogoVersion === paq.version){
+    bloqueoVisible(false); return;
+  }
+  if(cfg.clave && await usarPaquete(paq, cfg.clave)){ bloqueoVisible(false); return; }
   if(cfg.clave){ cfg.clave = ""; S.set("cfg", cfg); }   // cambiaron la clave
-  pedirClave(paq);
+  if(primeraVez) bloqueoClave(paq);
+  else { bloqueoVisible(false); pedirClave(paq); }
 }
 $("#btnRestCat").addEventListener("click", ()=>{
   abrirHoja('<div class="hoja-tit">¿Volver a la lista de ejemplo?</div>'+
@@ -1452,14 +1537,16 @@ function iniciar(){
     aviso("Se corrigieron las tildes y los grados de la lista de precios.","ok",5);
   }
   pintarCats(); pintarMat(); refrescarBadges(); encabezado();
-  if(!cfg.vendedora && !cfg.empresa){
-    aviso("Primero entra a <b>Ajustes</b>: pon tu nombre, la comisión y carga la lista de precios.","info",9);
+  if(!cfg.vendedora && cfg.catalogoPropio){
+    aviso("Entra a <b>Ajustes</b> y pon tu nombre, para que salga en las cotizaciones.","info",8);
   }
   if("serviceWorker" in navigator && location.protocol.startsWith("http")){
     navigator.serviceWorker.register("sw.js").catch(()=>{});
   }
   if(pendientes().length) setTimeout(()=>sincronizar(true), 1500);
-  setTimeout(()=>bajarCatalogo(false), 600);
+  // Antes de que alcance a verse el catálogo de ejemplo
+  if(!cfg.catalogoPropio && navigator.onLine && window.crypto && crypto.subtle) bloqueoEsperando();
+  setTimeout(()=>bajarCatalogo(false), 120);
 }
 $("#btnBajarCat").addEventListener("click", ()=>{
   if(!navigator.onLine){ aviso("Sin señal: conéctate para buscar la lista.","warn",4); return; }
