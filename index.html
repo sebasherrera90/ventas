@@ -496,8 +496,7 @@
       <div id="bqForm" style="display:none">
         <div class="bq-saludo">Acceso de vendedores</div>
         <div class="bq-tit">Te damos la bienvenida</div>
-        <p class="bq-sub">Tu usuario es tu número de cédula. La contraseña te la da la empresa.
-          Solo te las pedimos en este celular.</p>
+        <p class="bq-sub">Usuario: tu número de cédula.<br>Contraseña: te la da la empresa.</p>
         <div class="bq-campo">
           <label for="bqCedula">Usuario</label>
           <input id="bqCedula" type="text" inputmode="numeric" pattern="[0-9]*"
@@ -537,7 +536,7 @@
 <script src="pdf-cotizacion.js"></script>
 <script>
 "use strict";
-const VERSION = "23";   // sube con cada publicación, junto al CACHE de sw.js
+const VERSION = "24";   // sube con cada publicación, junto al CACHE de sw.js
 /* =========================================================================
    Ventas en Ruta — app de venta en frío, 100% offline.
    Los datos viven en el celular (localStorage). Las ventas se encolan y
