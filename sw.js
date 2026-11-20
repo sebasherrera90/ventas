@@ -1,7 +1,7 @@
 /* Ventas en Ruta — service worker.
    Guarda la app en el celular para que abra sin internet.
    Al publicar una version nueva, sube el numero de CACHE. */
-const CACHE = "ventas-ruta-v19";
+const CACHE = "ventas-ruta-v20";
 const ARCHIVOS = [
   "./",
   "./index.html",
@@ -17,7 +17,9 @@ const ARCHIVOS = [
 self.addEventListener("install", ev => {
   ev.waitUntil(
     caches.open(CACHE)
-      .then(c => c.addAll(ARCHIVOS).catch(() => c.add("./index.html")))
+      .then(c => c.addAll(ARCHIVOS)
+                  .catch(() => c.add("./index.html"))
+                  .then(() => c.add(FOTO).catch(() => {})))
       .then(() => self.skipWaiting())
   );
 });
@@ -37,11 +39,27 @@ self.addEventListener("activate", ev => {
    que sigue sirviendo en obra. */
 const LIMITE = 3500;
 
+/* La foto de la pantalla de entrada vive en el sitio de la empresa.
+   Se guarda aparte porque es de otro dominio y casi nunca cambia. */
+const FOTO = "https://hidrovalsas.com/wp-content/uploads/2022/08/fondo-e1744729782265.jpeg";
+
 self.addEventListener("fetch", ev => {
   const req = ev.request;
   if (req.method !== "GET") return;                   // los envios a la hoja van directo a la red
   const url = new URL(req.url);
-  if (url.origin !== location.origin) return;         // nada externo se cachea
+
+  // la foto del fondo: primero la copia guardada, es grande y no cambia
+  if (url.href === FOTO) {
+    ev.respondWith(
+      caches.match(req).then(guardada => guardada || fetch(req).then(r => {
+        if (r && r.ok) caches.open(CACHE).then(c => c.put(req, r.clone()));
+        return r;
+      }))
+    );
+    return;
+  }
+
+  if (url.origin !== location.origin) return;         // nada más externo se cachea
   if (url.pathname.endsWith("catalogo.json")) return; // la lista va siempre a la red
 
   ev.respondWith((async () => {
