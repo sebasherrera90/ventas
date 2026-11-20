@@ -228,9 +228,22 @@
   body.bloqueado > #avisos,
   body.bloqueado > .hoja,
   body.bloqueado > .fondo-modal{display:none !important}
-  .bq-caja{position:relative;z-index:1;background:#fff;border-radius:20px;overflow:hidden;
+  .bq-caja{position:relative;z-index:1;background:#fff;border-radius:22px;overflow:hidden;
     width:100%;max-width:430px;box-shadow:0 18px 50px rgba(0,0,0,.38)}
-  .bq-tit{font-size:21px;font-weight:800;margin:0 0 6px;line-height:1.25;color:#12294A}
+  .bq-tit{font-size:24px;font-weight:800;margin:0 0 6px;line-height:1.2;color:#12294A;
+    letter-spacing:-.3px}
+  /* Banda superior con la foto de obra y el borde inferior curvo */
+  .bq-foto{position:relative;height:208px;background:#12294A;overflow:hidden}
+  .bq-foto img{width:100%;height:100%;object-fit:cover;display:block}
+  .bq-foto .velo{position:absolute;inset:0;
+    background:linear-gradient(180deg,rgba(18,41,74,.55) 0%,rgba(18,41,74,.15) 45%,rgba(18,41,74,.1) 100%)}
+  .bq-foto .curva{position:absolute;left:0;right:0;bottom:-1px;width:100%;height:56px;display:block}
+  .bq-foto .marca{position:absolute;left:22px;top:20px;right:22px;color:#fff;z-index:2}
+  .bq-foto .marca .n{font-size:27px;font-weight:800;letter-spacing:2.5px;line-height:1}
+  .bq-foto .marca .l{font-size:10.5px;letter-spacing:1.6px;text-transform:uppercase;
+    opacity:.9;margin-top:5px;font-weight:600}
+  .bq-sinfoto{position:absolute;inset:0;
+    background:linear-gradient(140deg,#1B3C69 0%,#15325A 50%,#0C1D36 100%)}
   .bq-sub{font-size:14.5px;color:var(--gris);margin:0 0 20px;line-height:1.45}
   .bq-caja label{display:block;font-size:11.5px;text-transform:uppercase;letter-spacing:.5px;
     color:var(--gris);font-weight:700;margin-bottom:5px}
@@ -457,8 +470,18 @@
   </svg>
 
   <div class="bq-caja">
-    <div class="bq-membrete" id="bqMembrete"><img id="bqLogo" alt=""></div>
-    <div class="bq-marcatxt" id="bqMarca">HIDROVAL</div>
+    <div class="bq-foto">
+      <div class="bq-sinfoto" id="bqSinFoto"></div>
+      <img id="bqFoto" alt="" style="display:none">
+      <div class="velo"></div>
+      <div class="marca">
+        <div class="n" id="bqMarca">HIDROVAL</div>
+        <div class="l">Ingeniería al servicio del agua</div>
+      </div>
+      <svg class="curva" viewBox="0 0 430 56" preserveAspectRatio="none" aria-hidden="true">
+        <path fill="#ffffff" d="M0,56 L0,30 C90,2 200,0 300,14 C355,22 400,34 430,40 L430,56 Z"/>
+      </svg>
+    </div>
     <div class="bq-cuerpo">
       <div id="bqEspera">
         <div class="bq-tit">Preparando la lista de precios</div>
@@ -466,12 +489,18 @@
         <div class="bq-barra"><i></i></div>
       </div>
       <div id="bqForm" style="display:none">
-        <div class="bq-tit">Clave de la lista de precios</div>
-        <p class="bq-sub">Se escribe una sola vez y queda guardada en este celular. Te la da tu jefe.</p>
-        <label for="bqClave">Clave</label>
+        <div class="bq-tit">Te damos la bienvenida</div>
+        <p class="bq-sub">Escribe la clave para abrir la lista de precios. Solo te la pedimos esta vez.</p>
+        <div id="bqSesion" style="display:none">
+          <label for="bqCorreo">Correo</label>
+          <input id="bqCorreo" type="email" autocomplete="username" spellcheck="false"
+                 placeholder="tucorreo@ejemplo.com">
+          <div style="height:12px"></div>
+        </div>
+        <label for="bqClave" id="bqEtiqueta">Clave</label>
         <input id="bqClave" type="password" autocomplete="current-password" spellcheck="false">
         <div id="bqMsg"></div>
-        <button class="btn btn-pri" id="bqOk">Abrir la lista</button>
+        <button class="btn btn-pri" id="bqOk">Entrar</button>
         <button class="bq-otro" id="bqOtro">No tengo la clave</button>
       </div>
     </div>
@@ -496,10 +525,11 @@
 </div>
 
 <script src="membrete.js"></script>
+<script src="foto-login.js"></script>
 <script src="pdf-cotizacion.js"></script>
 <script>
 "use strict";
-const VERSION = "18";   // sube con cada publicación, junto al CACHE de sw.js
+const VERSION = "19";   // sube con cada publicación, junto al CACHE de sw.js
 /* =========================================================================
    Ventas en Ruta — app de venta en frío, 100% offline.
    Los datos viven en el celular (localStorage). Las ventas se encolan y
@@ -1653,18 +1683,16 @@ function pedirClave(paq){
    ninguna lista propia. Si ya tiene una, una version nueva no puede
    dejarla sin trabajar, asi que ahi se usa la hoja de siempre. */
 function marcaBloqueo(){
-  const img = $("#bqLogo"), M = window.MEMBRETE;
-  const sinMembrete = ()=>{
-    $("#bqMembrete").style.display = "none";
-    const m = $("#bqMarca");
-    m.style.display = "block";
-    m.textContent = (cfg.empresa || "Ventas en Ruta").toUpperCase();
-  };
-  if(M && M.encabezado && M.encabezado.jpg){
-    img.onerror = sinMembrete;
-    img.alt = cfg.empresa || "Hidroval";
-    img.src = "data:image/jpeg;base64," + M.encabezado.jpg;
-  } else sinMembrete();
+  const m = $("#bqMarca");
+  if(m) m.textContent = String(cfg.empresa || "Hidroval")
+          .replace(/\s*S\.?\s*A\.?\s*S\.?\.?\s*$/i, "").trim().toUpperCase();
+  const img = $("#bqFoto"), foto = window.FOTO_LOGIN;
+  if(img && foto){
+    img.onload  = ()=>{ img.style.display = "block";
+                        const sf = $("#bqSinFoto"); if(sf) sf.style.display = "none"; };
+    img.onerror = ()=>{ img.style.display = "none"; };
+    img.src = foto;
+  }
 }
 function bloqueoVisible(ver){
   $("#bloqueo").classList.toggle("ver", !!ver);

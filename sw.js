@@ -1,7 +1,7 @@
 /* Ventas en Ruta — service worker.
    Guarda la app en el celular para que abra sin internet.
    Al publicar una version nueva, sube el numero de CACHE. */
-const CACHE = "ventas-ruta-v18";
+const CACHE = "ventas-ruta-v19";
 const ARCHIVOS = [
   "./",
   "./index.html",
@@ -10,7 +10,8 @@ const ARCHIVOS = [
   "./icon-512.png",
   "./icon-maskable.png",
   "./membrete.js",
-  "./pdf-cotizacion.js"
+  "./pdf-cotizacion.js",
+  "./foto-login.js"
 ];
 
 self.addEventListener("install", ev => {
