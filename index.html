@@ -230,8 +230,11 @@
   body.bloqueado > .fondo-modal{display:none !important}
   .bq-caja{position:relative;z-index:1;background:#fff;border-radius:22px;overflow:hidden;
     width:100%;max-width:430px;box-shadow:0 18px 50px rgba(0,0,0,.38)}
-  .bq-tit{font-size:24px;font-weight:800;margin:0 0 6px;line-height:1.2;color:#12294A;
-    letter-spacing:-.3px}
+  .bq-saludo{display:inline-block;font-size:10.5px;font-weight:800;letter-spacing:1.6px;
+    text-transform:uppercase;color:#2E6D9E;background:#EAF2F9;border-radius:999px;
+    padding:5px 12px;margin:0 0 13px}
+  .bq-tit{font-size:27px;font-weight:800;margin:0 0 8px;line-height:1.14;color:#12294A;
+    letter-spacing:-.6px}
   /* Banda superior con la foto de obra y el borde inferior curvo */
   .bq-foto{position:relative;height:208px;background:#12294A;overflow:hidden}
   .bq-foto img{width:100%;height:100%;object-fit:cover;display:block}
@@ -244,7 +247,9 @@
     opacity:.9;margin-top:5px;font-weight:600}
   .bq-sinfoto{position:absolute;inset:0;
     background:linear-gradient(140deg,#1B3C69 0%,#15325A 50%,#0C1D36 100%)}
-  .bq-sub{font-size:14.5px;color:var(--gris);margin:0 0 20px;line-height:1.45}
+  .bq-sub{font-size:14.5px;color:var(--gris);margin:0 0 22px;line-height:1.45}
+  .bq-campo{margin-bottom:14px}
+  .bq-campo:last-of-type{margin-bottom:4px}
   .bq-caja label{display:block;font-size:11.5px;text-transform:uppercase;letter-spacing:.5px;
     color:var(--gris);font-weight:700;margin-bottom:5px}
   .bq-caja input{width:100%;padding:14px;border:1.5px solid var(--linea);
@@ -489,16 +494,19 @@
         <div class="bq-barra"><i></i></div>
       </div>
       <div id="bqForm" style="display:none">
+        <div class="bq-saludo">Acceso de vendedores</div>
         <div class="bq-tit">Te damos la bienvenida</div>
-        <p class="bq-sub">Escribe la clave para abrir la lista de precios. Solo te la pedimos esta vez.</p>
-        <div id="bqSesion" style="display:none">
-          <label for="bqCorreo">Correo</label>
-          <input id="bqCorreo" type="email" autocomplete="username" spellcheck="false"
-                 placeholder="tucorreo@ejemplo.com">
-          <div style="height:12px"></div>
+        <p class="bq-sub">Entra con tu número de cédula y la contraseña que te dio la empresa.
+          Solo te las pedimos en este celular.</p>
+        <div class="bq-campo">
+          <label for="bqCedula">Cédula</label>
+          <input id="bqCedula" type="text" inputmode="numeric" pattern="[0-9]*"
+                 autocomplete="username" spellcheck="false" placeholder="Sin puntos ni comas">
         </div>
-        <label for="bqClave" id="bqEtiqueta">Clave</label>
-        <input id="bqClave" type="password" autocomplete="current-password" spellcheck="false">
+        <div class="bq-campo">
+          <label for="bqClave" id="bqEtiqueta">Contraseña</label>
+          <input id="bqClave" type="password" autocomplete="current-password" spellcheck="false">
+        </div>
         <div id="bqMsg"></div>
         <button class="btn btn-pri" id="bqOk">Entrar</button>
         <button class="bq-otro" id="bqOtro">No tengo la clave</button>
@@ -529,7 +537,7 @@
 <script src="pdf-cotizacion.js"></script>
 <script>
 "use strict";
-const VERSION = "20";   // sube con cada publicación, junto al CACHE de sw.js
+const VERSION = "21";   // sube con cada publicación, junto al CACHE de sw.js
 /* =========================================================================
    Ventas en Ruta — app de venta en frío, 100% offline.
    Los datos viven en el celular (localStorage). Las ventas se encolan y
@@ -555,7 +563,7 @@ const CAT_DEMO = [
 const CFG_DEF = {
   vendedora:"", empresa:"Hidroval S.A.S.", comision:10, descMax:15,
   url:"", token:"", wa:"", catalogoPropio:false, catalogoNombre:"",
-  clave:"", catalogoVersion:"",
+  clave:"", catalogoVersion:"", cedula:"",
   consecutivo:5576, iva:19, ciudad:"Medellín",
   firmante:"Sebastián Zuluaga Pareja", cargo:"Representante técnico comercial",
   pinAdmin:"",
@@ -1164,7 +1172,8 @@ $("#btnCerrar").addEventListener("click", ()=>{
     const t2 = totalesCarrito();
     const venta = {
       id: nuevoId(), fecha: fechaISO(), estado:"pendiente", intentos:0,
-      vendedora: cfg.vendedora||"(sin nombre)", empresa: cfg.empresa||"",
+      vendedora: cfg.vendedora||"(sin nombre)", cedula: cfg.cedula||"",
+      empresa: cfg.empresa||"",
       cliente:{ nombre:$("#cliNom").value.trim(), contacto:$("#cliCon").value.trim(),
                 telefono:$("#cliTel").value.trim(), nit:$("#cliNit").value.trim() },
       observaciones: $("#cliObs").value.trim(),
@@ -1707,28 +1716,49 @@ function bloqueoClave(paq){
   bloqueoVisible(true);
   $("#bqEspera").style.display = "none";
   $("#bqForm").style.display = "";
-  const inp = $("#bqClave");
-  inp.value = ""; $("#bqMsg").innerHTML = ""; $("#bqOk").disabled = false;
+  const ced = $("#bqCedula"), inp = $("#bqClave"), msg = $("#bqMsg");
+  ced.value = cfg.cedula || ""; inp.value = "";
+  msg.innerHTML = ""; $("#bqOk").disabled = false;
+
+  /* La cédula va sin puntos ni espacios: si los teclea los quito mientras
+     escribe, en vez de rechazarla al final. */
+  ced.oninput = ()=>{
+    const limpio = ced.value.replace(/\D+/g, "");
+    if(limpio !== ced.value) ced.value = limpio;
+  };
+
+  const error = texto => {
+    msg.innerHTML = '<div class="alerta-min" style="margin-top:10px">'+texto+'</div>';
+    $("#bqOk").disabled = false;
+  };
   const intentar = async ()=>{
-    const c = inp.value;
-    if(!c) return;
+    const cedula = ced.value.replace(/\D+/g, ""), clave = inp.value;
+    if(!cedula){ ced.focus(); return error("Escribe tu número de cédula."); }
+    if(cedula.length < 6 || cedula.length > 12){
+      ced.focus(); ced.select();
+      return error("Ese número de cédula no parece completo. Revísalo.");
+    }
+    if(!clave){ inp.focus(); return error("Escribe tu contraseña."); }
     $("#bqOk").disabled = true;
-    $("#bqMsg").innerHTML = '<div class="bq-cargando">Abriendo la lista…</div>';
-    if(await usarPaquete(paq, c)){ bloqueoVisible(false); }
-    else{
-      $("#bqMsg").innerHTML = '<div class="alerta-min" style="margin-top:10px">'+
-        'Esa clave no abre la lista. Revisa mayúsculas y guiones.</div>';
-      $("#bqOk").disabled = false; inp.focus(); inp.select();
+    msg.innerHTML = '<div class="bq-cargando">Abriendo la lista…</div>';
+    if(await usarPaquete(paq, clave)){
+      cfg.cedula = cedula; S.set("cfg", cfg);   // queda en la venta, para saber quién vendió
+      bloqueoVisible(false);
+    }else{
+      error("Esa contraseña no abre la lista. Revisa mayúsculas y guiones.");
+      inp.focus(); inp.select();
     }
   };
   $("#bqOk").onclick = intentar;
-  inp.onkeydown = e => { if(e.key === "Enter") intentar(); };
+  const alEnter = e => { if(e.key === "Enter") intentar(); };
+  ced.onkeydown = e => { if(e.key === "Enter"){ e.preventDefault(); inp.focus(); } };
+  inp.onkeydown = alEnter;
   $("#bqOtro").onclick = ()=>{
-    $("#bqMsg").innerHTML = '<div class="aviso info" style="margin:12px 0 0">'+
-      'La lista de precios va protegida. Pídele la clave a tu jefe: se escribe una sola vez '+
-      'y no te la vuelve a pedir en este celular.</div>';
+    msg.innerHTML = '<div class="aviso info" style="margin:12px 0 0">'+
+      'La lista de precios va protegida. Pídele la contraseña a tu jefe: se escribe una sola '+
+      'vez y no te la vuelve a pedir en este celular.</div>';
   };
-  setTimeout(()=>{ try{ inp.focus(); }catch(e){} }, 300);
+  setTimeout(()=>{ try{ (ced.value ? inp : ced).focus(); }catch(e){} }, 300);
 }
 
 async function bajarCatalogo(forzar){
